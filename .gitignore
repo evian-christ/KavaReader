@@ -1,0 +1,26 @@
+# Swift / Xcode
+DerivedData/
+*.xcworkspace
+xcuserdata/
+.DS_Store
+
+# Swift Package Manager
+.swiftpm/
+.build/
+Package.resolved
+
+# Logs
+*.log
+
+# iOS Builds
+*.ipa
+build/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+
+# Misc
+*.swp

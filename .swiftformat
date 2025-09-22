@@ -1,0 +1,8 @@
+--indent 4
+--tabwidth 4
+--maxwidth 120
+--wraparguments after-first
+--wrapcollections before-first
+--enable organizeDeclarations
+--enable redundantReturn
+--disable wrapConditionalBodies
