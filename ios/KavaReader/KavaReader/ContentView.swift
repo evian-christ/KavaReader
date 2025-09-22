@@ -1,112 +1,121 @@
 import SwiftUI
 
-struct LibrarySeries: Identifiable, Hashable {
-    // MARK: Lifecycle
-
-    init(id: UUID = UUID(), title: String, author: String, coverGradients: [Color]) {
-        self.id = id
-        self.title = title
-        self.author = author
-        self.coverGradients = coverGradients
-    }
-
-    // MARK: Internal
-
-    let id: UUID
-    let title: String
-    let author: String
-    let coverGradients: [Color]
-}
-
-struct LibrarySection: Identifiable {
-    // MARK: Lifecycle
-
-    init(id: UUID = UUID(), title: String, items: [LibrarySeries]) {
-        self.id = id
-        self.title = title
-        self.items = items
-    }
-
-    // MARK: Internal
-
-    let id: UUID
-    let title: String
-    let items: [LibrarySeries]
-}
-
 struct ContentView: View {
     // MARK: Internal
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 32) {
-                    ForEach(filteredSections) { section in
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Text(section.title)
-                                    .font(.title2.weight(.semibold))
-                                Spacer()
-                                Button("모두 보기") {}
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                            LazyVGrid(columns: grid, spacing: 24) {
-                                ForEach(section.items) { item in
-                                    NavigationLink(value: item) {
-                                        LibraryCoverView(series: item)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
+            Group {
+                if viewModel.isLoading {
+                    ProgressView("라이브러리를 불러오는 중")
+                        .progressViewStyle(.circular)
+                } else if let message = viewModel.errorMessage {
+                    LibraryErrorView(message: message) {
+                        Task {
+                            await refreshLibrary(force: true)
                         }
                     }
+                } else if filteredSections.isEmpty {
+                    LibraryEmptyView(query: searchText)
+                } else {
+                    libraryList
                 }
-                .padding(.horizontal, 28)
-                .padding(.top, 32)
             }
-            .background(Color(.systemBackground))
             .navigationTitle("라이브러리")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always),
                         prompt: "작가, 제목, 태그 검색")
+            .task {
+                await refreshLibrary(force: true)
+            }
+            .refreshable {
+                await refreshLibrary(force: true)
+            }
         }
         .navigationDestination(for: LibrarySeries.self) { series in
             Text("\(series.title) 상세 보기")
                 .font(.title)
                 .padding()
         }
+        .onChange(of: serverBaseURL) { _ in
+            Task { await refreshLibrary(force: true) }
+        }
+        .onChange(of: serverAPIKey) { _ in
+            Task { await refreshLibrary(force: true) }
+        }
     }
 
     // MARK: Private
 
-    @State private var searchText: String = ""
+    @AppStorage("server_base_url") private var serverBaseURL: String = ""
+    @AppStorage("server_api_key") private var serverAPIKey: String = ""
 
-    private let sections: [LibrarySection] = LibrarySection.mock
+    @StateObject private var viewModel =
+        LibraryViewModel(service: LibraryServiceFactory(baseURLString: nil, apiKey: nil).makeService())
+    @State private var searchText: String = ""
+    @State private var lastServiceKey: String = ""
 
     private let grid = [GridItem(.adaptive(minimum: 140), spacing: 24)]
 
     private var filteredSections: [LibrarySection] {
-        guard !searchText.isEmpty else { return sections }
-        return sections.compactMap { section -> LibrarySection? in
-            let matches = section.items.filter { item in
-                item.title.localizedCaseInsensitiveContains(searchText) ||
-                    item.author.localizedCaseInsensitiveContains(searchText)
+        viewModel.filteredSections(query: searchText)
+    }
+
+    private var libraryList: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 32) {
+                ForEach(filteredSections) { section in
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text(section.title)
+                                .font(.title2.weight(.semibold))
+                            Spacer()
+                            Button("모두 보기") {}
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        LazyVGrid(columns: grid, spacing: 24) {
+                            ForEach(section.items) { item in
+                                NavigationLink(value: item) {
+                                    LibraryCoverView(series: item)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
             }
-            return matches.isEmpty ? nil : LibrarySection(title: section.title, items: matches)
+            .padding(.horizontal, 28)
+            .padding(.top, 32)
         }
+        .background(Color(.systemBackground))
+    }
+
+    private func refreshLibrary(force: Bool = false) async {
+        let key = serviceSignature()
+        if force || key != lastServiceKey {
+            let factory = LibraryServiceFactory(baseURLString: serverBaseURL, apiKey: serverAPIKey)
+            viewModel.updateService(factory.makeService())
+            lastServiceKey = key
+        }
+        await viewModel.load()
+    }
+
+    private func serviceSignature() -> String {
+        "\(serverBaseURL)|\(serverAPIKey)"
     }
 }
 
 private struct LibraryCoverView: View {
+    // MARK: Internal
+
     let series: LibrarySeries
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ZStack(alignment: .bottomLeading) {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(LinearGradient(colors: series.coverGradients, startPoint: .topLeading,
-                                         endPoint: .bottomTrailing))
+                    .fill(LinearGradient(colors: gradientColors, startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(height: 200)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(series.title)
@@ -121,23 +130,49 @@ private struct LibraryCoverView: View {
             }
         }
     }
+
+    // MARK: Private
+
+    private var gradientColors: [Color] {
+        let colors = series.coverColorHexes.compactMap(Color.init(hex:))
+        return colors.isEmpty ? [.purple, .blue] : colors
+    }
 }
 
-private extension LibrarySection {
-    static let mock: [LibrarySection] = [
-        LibrarySection(title: "최근 추가",
-                       items: [
-                           LibrarySeries(title: "은하 해적단", author: "김하늘", coverGradients: [.pink, .purple]),
-                           LibrarySeries(title: "도시의 빛", author: "이도윤", coverGradients: [.orange, .red]),
-                           LibrarySeries(title: "서늘한 바람", author: "최유나", coverGradients: [.blue, .teal]),
-                       ]),
-        LibrarySection(title: "읽던 만화",
-                       items: [
-                           LibrarySeries(title: "밤의 노트", author: "박여울", coverGradients: [.mint, .blue]),
-                           LibrarySeries(title: "코드 브레이커", author: "정태규", coverGradients: [.purple, .indigo]),
-                           LibrarySeries(title: "숲 속 이야기", author: "한서윤", coverGradients: [.green, .teal]),
-                       ]),
-    ]
+private struct LibraryErrorView: View {
+    let message: String
+    let retryAction: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.largeTitle)
+                .foregroundStyle(.orange)
+            Text(message)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+            Button("다시 시도") {
+                retryAction()
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding(32)
+    }
+}
+
+private struct LibraryEmptyView: View {
+    let query: String
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "tray")
+                .font(.largeTitle)
+                .foregroundStyle(.secondary)
+            Text(query.isEmpty ? "표시할 만화가 없습니다." : "검색 결과가 없습니다.")
+                .foregroundStyle(.secondary)
+        }
+        .padding(32)
+    }
 }
 
 #Preview {

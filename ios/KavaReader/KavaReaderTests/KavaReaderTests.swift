@@ -1,14 +1,14 @@
-//
-//  KavaReaderTests.swift
-//  KavaReaderTests
-//
-//  Created by Chan on 22/09/2025.
-//
-
+import Foundation
+@testable import KavaReader
 import Testing
 
-struct KavaReaderTests {
-    @Test func example() async throws {
-        // Write your test here and use APIs like `#expect(...)` to check expected conditions.
+struct LibraryServiceTests {
+    @MainActor
+    @Test func mockServiceLoadsSections() async throws {
+        let service = MockLibraryService(bundle: .main)
+        let sections = try await service.fetchSections()
+
+        #expect(!sections.isEmpty)
+        #expect(sections.flatMap { $0.items }.count >= 3)
     }
 }

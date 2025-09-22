@@ -11,7 +11,17 @@ import SwiftUI
 struct KavaReaderApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            TabView {
+                ContentView()
+                    .tabItem {
+                        Label("라이브러리", systemImage: "rectangle.stack.fill")
+                    }
+
+                SettingsView()
+                    .tabItem {
+                        Label("설정", systemImage: "gearshape")
+                    }
+            }
         }
     }
 }
