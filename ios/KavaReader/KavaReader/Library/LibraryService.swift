@@ -2,9 +2,12 @@ import Foundation
 
 protocol LibraryServicing {
     func fetchSections() async throws -> [LibrarySection]
+    func fetchSeriesDetail(seriesID: UUID) async throws -> SeriesDetail
+    func pageImageURL(seriesID: UUID, chapterID: UUID, pageNumber: Int) throws -> URL
+    func fetchPageImage(seriesID: UUID, chapterID: UUID, pageNumber: Int) async throws -> Data
 }
 
-enum LibraryServiceError: Error, LocalizedError {
+enum LibraryServiceError: Error, LocalizedError, Equatable {
     case missingResource
     case decodingFailed
     case invalidBaseURL
@@ -32,7 +35,26 @@ enum LibraryServiceError: Error, LocalizedError {
     }
 }
 
-struct MockLibraryService: LibraryServicing {
+extension LibraryServiceError {
+    static func == (lhs: LibraryServiceError, rhs: LibraryServiceError) -> Bool {
+        switch (lhs, rhs) {
+        case (.missingResource, .missingResource),
+             (.decodingFailed, .decodingFailed),
+             (.invalidBaseURL, .invalidBaseURL),
+             (.invalidResponse, .invalidResponse):
+            return true
+        case let (.unsupportedScheme(lScheme), .unsupportedScheme(rScheme)):
+            return lScheme == rScheme
+        case let (.requestFailed(lCode), .requestFailed(rCode)):
+            return lCode == rCode
+        default:
+            return false
+        }
+    }
+}
+
+@MainActor
+final class MockLibraryService: LibraryServicing {
     // MARK: Lifecycle
 
     init(resourceName: String = "LibraryMockData", bundle: Bundle = .main) {
@@ -46,6 +68,10 @@ struct MockLibraryService: LibraryServicing {
     let bundle: Bundle
 
     func fetchSections() async throws -> [LibrarySection] {
+        if let cached = cachedSections {
+            return cached
+        }
+
         guard let url = bundle.url(forResource: resourceName, withExtension: "json") else {
             throw LibraryServiceError.missingResource
         }
@@ -55,11 +81,73 @@ struct MockLibraryService: LibraryServicing {
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
             let response = try decoder.decode(LibrarySectionsResponse.self, from: data)
-            return response.sections.map { $0.toDomain() }
+            let sections = response.sections.map { $0.toDomain() }
+            cachedSections = sections
+            buildDetailStore(from: sections)
+            return sections
         } catch is DecodingError {
             throw LibraryServiceError.decodingFailed
         } catch {
             throw error
+        }
+    }
+
+    func fetchSeriesDetail(seriesID: UUID) async throws -> SeriesDetail {
+        if detailStore[seriesID] == nil {
+            let sections = try await fetchSections()
+            buildDetailStore(from: sections)
+        }
+
+        guard let detail = detailStore[seriesID] else {
+            throw LibraryServiceError.missingResource
+        }
+
+        return detail
+    }
+
+    func pageImageURL(seriesID: UUID, chapterID: UUID, pageNumber: Int) throws -> URL {
+        guard pageNumber > 0 else {
+            throw LibraryServiceError.invalidResponse
+        }
+
+        return URL(string: "https://example.com/mock/series/\(seriesID.uuidString)/chapter/\(chapterID.uuidString)/page/\(pageNumber)")!
+    }
+
+    func fetchPageImage(seriesID: UUID, chapterID: UUID, pageNumber: Int) async throws -> Data {
+        guard pageNumber > 0 else {
+            throw LibraryServiceError.invalidResponse
+        }
+
+        return Data()
+    }
+
+    // MARK: Private
+
+    private var cachedSections: [LibrarySection]?
+    private var detailStore: [UUID: SeriesDetail] = [:]
+
+    private func buildDetailStore(from sections: [LibrarySection]) {
+        for section in sections {
+            for series in section.items {
+                guard detailStore[series.id] == nil else { continue }
+
+                let chapters: [SeriesChapter] = (1 ... 5).map { index in
+                    let chapterID = UUID()
+                    return SeriesChapter(id: chapterID,
+                                          title: "챕터 \(index)",
+                                          number: Double(index),
+                                          pageCount: 18 + index,
+                                          lastReadPage: nil)
+                }
+
+                let detail = SeriesDetail(id: series.id,
+                                           title: series.title,
+                                           author: series.author,
+                                           summary: "\(series.title)에 대한 요약 텍스트입니다. Kavita 연동 시 실제 메타데이터로 대체됩니다.",
+                                           coverImageURL: nil,
+                                           chapters: chapters)
+                detailStore[series.id] = detail
+            }
         }
     }
 }

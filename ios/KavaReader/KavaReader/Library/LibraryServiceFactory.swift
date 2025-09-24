@@ -20,12 +20,12 @@ struct LibraryServiceFactory {
             return UnsupportedSchemeLibraryService(scheme: scheme)
         }
 
-        if components.path.isEmpty {
-            components.path = ""
+        guard let host = components.host, !host.isEmpty else {
+            return InvalidBaseURLLibraryService()
         }
 
-        if let last = components.path.last, last == "/" {
-            components.path.removeLast()
+        if components.path == "/" {
+            components.path = ""
         }
 
         guard let url = components.url else {
@@ -33,7 +33,7 @@ struct LibraryServiceFactory {
         }
 
         let token = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return NetworkLibraryService(baseURL: url, apiKey: token)
+        return KavitaLibraryService(baseURL: url, apiKey: token)
     }
 }
 
@@ -43,12 +43,36 @@ private struct InvalidBaseURLLibraryService: LibraryServicing {
     func fetchSections() async throws -> [LibrarySection] {
         throw LibraryServiceError.invalidBaseURL
     }
+
+    func fetchSeriesDetail(seriesID: UUID) async throws -> SeriesDetail {
+        throw LibraryServiceError.invalidBaseURL
+    }
+
+    func pageImageURL(seriesID: UUID, chapterID: UUID, pageNumber: Int) throws -> URL {
+        throw LibraryServiceError.invalidBaseURL
+    }
+
+    func fetchPageImage(seriesID: UUID, chapterID: UUID, pageNumber: Int) async throws -> Data {
+        throw LibraryServiceError.invalidBaseURL
+    }
 }
 
 private struct UnsupportedSchemeLibraryService: LibraryServicing {
     let scheme: String
 
     func fetchSections() async throws -> [LibrarySection] {
+        throw LibraryServiceError.unsupportedScheme(scheme)
+    }
+
+    func fetchSeriesDetail(seriesID: UUID) async throws -> SeriesDetail {
+        throw LibraryServiceError.unsupportedScheme(scheme)
+    }
+
+    func pageImageURL(seriesID: UUID, chapterID: UUID, pageNumber: Int) throws -> URL {
+        throw LibraryServiceError.unsupportedScheme(scheme)
+    }
+
+    func fetchPageImage(seriesID: UUID, chapterID: UUID, pageNumber: Int) async throws -> Data {
         throw LibraryServiceError.unsupportedScheme(scheme)
     }
 }
