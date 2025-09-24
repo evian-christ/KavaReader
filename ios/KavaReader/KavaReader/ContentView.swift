@@ -33,9 +33,7 @@ struct ContentView: View {
             }
         }
         .navigationDestination(for: LibrarySeries.self) { series in
-            Text("\(series.title) 상세 보기")
-                .font(.title)
-                .padding()
+            SeriesDetailView(series: series)
         }
         .onChange(of: serverBaseURL) { _ in
             Task { await refreshLibrary(force: true) }

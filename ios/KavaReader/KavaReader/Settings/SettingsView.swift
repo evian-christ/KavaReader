@@ -7,10 +7,10 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section("서버") {
-                    TextField("https://example.local", text: $serverBaseURL)
+                    TextField("https://reader.local", text: $serverBaseURL)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
-                    Text("Synology NAS에서 운영 중인 스트리밍 서버 주소를 입력하세요.")
+                    Text("Synology NAS에서 운영 중인 Kavita Adapter 주소를 입력하세요.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -18,13 +18,13 @@ struct SettingsView: View {
                 Section("인증") {
                     SecureField("API Key (선택)", text: $serverAPIKey)
                         .textInputAutocapitalization(.never)
-                    Text("API 키가 필요 없다면 빈칸으로 두세요.")
+                    Text("Adapter 설정 화면에서 발급한 API 키가 필요 없다면 빈칸으로 두세요.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
 
                 Section("도움말") {
-                    Text("라이브러리 화면은 설정한 서버에 연결할 수 없으면 자동으로 목 데이터를 사용합니다.")
+                    Text("라이브러리 화면은 Adapter 연결에 실패하면 자동으로 목 데이터를 사용합니다.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
