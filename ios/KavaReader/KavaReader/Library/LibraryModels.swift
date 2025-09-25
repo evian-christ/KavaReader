@@ -3,6 +3,7 @@ import Foundation
 // SeriesInfo 구조체 추가
 struct SeriesInfo: Identifiable, Hashable, Decodable {
     let id: UUID
+    let kavitaSeriesId: Int?
     let title: String
     let author: String
     let coverColorHexes: [String]
@@ -13,6 +14,7 @@ extension SeriesInfo {
     func toLibrarySeries() -> LibrarySeries {
         return LibrarySeries(
             id: self.id,
+            kavitaSeriesId: self.kavitaSeriesId,
             title: self.title,
             author: self.author,
             coverColorHexes: self.coverColorHexes,
@@ -24,8 +26,9 @@ extension SeriesInfo {
 struct LibrarySeries: Identifiable, Hashable {
     // MARK: Lifecycle
 
-    init(id: UUID = UUID(), title: String, author: String, coverColorHexes: [String], coverURL: URL? = nil) {
+    init(id: UUID = UUID(), kavitaSeriesId: Int? = nil, title: String, author: String, coverColorHexes: [String], coverURL: URL? = nil) {
         self.id = id
+        self.kavitaSeriesId = kavitaSeriesId
         self.title = title
         self.author = author
         self.coverColorHexes = coverColorHexes
@@ -35,6 +38,7 @@ struct LibrarySeries: Identifiable, Hashable {
     // MARK: Internal
 
     let id: UUID
+    let kavitaSeriesId: Int? // Store the actual Kavita series ID
     let title: String
     let author: String
     let coverColorHexes: [String]
@@ -120,13 +124,17 @@ struct SeriesChapter: Identifiable, Hashable {
          title: String,
          number: Double,
          pageCount: Int,
-         lastReadPage: Int? = nil)
+         lastReadPage: Int? = nil,
+         kavitaVolumeId: Int? = nil,
+         coverImageURL: URL? = nil)
     {
         self.id = id
         self.title = title
         self.number = number
         self.pageCount = pageCount
         self.lastReadPage = lastReadPage
+        self.kavitaVolumeId = kavitaVolumeId
+        self.coverImageURL = coverImageURL
     }
 
     // MARK: Internal
@@ -136,6 +144,8 @@ struct SeriesChapter: Identifiable, Hashable {
     let number: Double
     let pageCount: Int
     let lastReadPage: Int?
+    let kavitaVolumeId: Int? // Store Kavita volume ID for API calls
+    let coverImageURL: URL? // Volume cover image URL
 }
 
 struct LibrarySectionsResponse: Decodable {
@@ -183,6 +193,7 @@ extension LibrarySectionDTO {
         let seriesInfoItems = items.map { dto -> SeriesInfo in
             SeriesInfo(
                 id: dto.id ?? UUID(),
+                kavitaSeriesId: nil, // Legacy DTO doesn't have Kavita series ID
                 title: dto.title,
                 author: dto.author,
                 coverColorHexes: dto.coverColorHexes,
@@ -200,7 +211,7 @@ extension LibrarySectionDTO {
 
 extension LibrarySeriesDTO {
     func toDomain() -> LibrarySeries {
-        LibrarySeries(id: id ?? UUID(), title: title, author: author, coverColorHexes: coverColorHexes, coverURL: coverURL)
+        LibrarySeries(id: id ?? UUID(), kavitaSeriesId: nil, title: title, author: author, coverColorHexes: coverColorHexes, coverURL: coverURL)
     }
 }
 

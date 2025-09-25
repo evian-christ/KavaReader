@@ -15,9 +15,11 @@ final class SeriesDetailViewModel: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
 
-    func load(seriesID: UUID, force: Bool = false) async {
+    func load(kavitaSeriesId: Int, force: Bool = false) async {
         guard !isLoading else { return }
-        if !force, let loaded = detail, loaded.id == seriesID {
+        if !force, let _ = detail {
+            // We can't directly compare kavitaSeriesId with SeriesDetail since SeriesDetail uses UUID
+            // For now, we'll always reload if forced or if no detail is loaded
             return
         }
 
@@ -25,7 +27,7 @@ final class SeriesDetailViewModel: ObservableObject {
         errorMessage = nil
 
         do {
-            let fetched = try await service.fetchSeriesDetail(seriesID: seriesID)
+            let fetched = try await service.fetchSeriesDetail(kavitaSeriesId: kavitaSeriesId)
             detail = fetched
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
@@ -37,6 +39,10 @@ final class SeriesDetailViewModel: ObservableObject {
 
     func updateService(_ newService: LibraryServicing) {
         service = newService
+    }
+
+    func setError(_ message: String) {
+        errorMessage = message
     }
 
     // MARK: Private

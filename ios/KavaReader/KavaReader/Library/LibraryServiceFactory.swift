@@ -49,7 +49,7 @@ private struct InvalidBaseURLLibraryService: LibraryServicing {
         throw LibraryServiceError.invalidBaseURL
     }
 
-    func fetchSeriesDetail(seriesID: UUID) async throws -> SeriesDetail {
+    func fetchSeriesDetail(kavitaSeriesId: Int) async throws -> SeriesDetail {
         throw LibraryServiceError.invalidBaseURL
     }
 
@@ -73,7 +73,7 @@ private struct UnsupportedSchemeLibraryService: LibraryServicing {
         throw LibraryServiceError.unsupportedScheme(scheme)
     }
 
-    func fetchSeriesDetail(seriesID: UUID) async throws -> SeriesDetail {
+    func fetchSeriesDetail(kavitaSeriesId: Int) async throws -> SeriesDetail {
         throw LibraryServiceError.unsupportedScheme(scheme)
     }
 

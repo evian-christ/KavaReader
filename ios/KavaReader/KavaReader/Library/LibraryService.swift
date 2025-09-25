@@ -3,7 +3,7 @@ import Foundation
 protocol LibraryServicing {
     func fetchSections() async throws -> [LibrarySection]
     func fetchFullSection(sectionTitle: String) async throws -> [LibrarySeries]
-    func fetchSeriesDetail(seriesID: UUID) async throws -> SeriesDetail
+    func fetchSeriesDetail(kavitaSeriesId: Int) async throws -> SeriesDetail
     func pageImageURL(seriesID: UUID, chapterID: UUID, pageNumber: Int) throws -> URL
     func fetchPageImage(seriesID: UUID, chapterID: UUID, pageNumber: Int) async throws -> Data
 }
@@ -112,17 +112,28 @@ final class MockLibraryService: LibraryServicing {
         return []
     }
 
-    func fetchSeriesDetail(seriesID: UUID) async throws -> SeriesDetail {
-        if detailStore[seriesID] == nil {
-            let sections = try await fetchSections()
-            buildDetailStore(from: sections)
+    func fetchSeriesDetail(kavitaSeriesId: Int) async throws -> SeriesDetail {
+        // For mock service, we'll still use UUID-based lookup but match by kavitaSeriesId
+        let sections = try await fetchSections()
+
+        // Find series by kavitaSeriesId
+        for section in sections {
+            for series in section.items {
+                if series.kavitaSeriesId == kavitaSeriesId {
+                    if detailStore[series.id] == nil {
+                        buildDetailStore(from: sections)
+                    }
+
+                    guard let detail = detailStore[series.id] else {
+                        throw LibraryServiceError.missingResource
+                    }
+
+                    return detail
+                }
+            }
         }
 
-        guard let detail = detailStore[seriesID] else {
-            throw LibraryServiceError.missingResource
-        }
-
-        return detail
+        throw LibraryServiceError.missingResource
     }
 
     func pageImageURL(seriesID: UUID, chapterID: UUID, pageNumber: Int) throws -> URL {
@@ -191,7 +202,9 @@ final class MockLibraryService: LibraryServicing {
                                           title: "챕터 \(index)",
                                           number: Double(index),
                                           pageCount: 18 + index,
-                                          lastReadPage: nil)
+                                          lastReadPage: nil,
+                                          kavitaVolumeId: nil,
+                                          coverImageURL: nil)
                 }
 
                 let detail = SeriesDetail(id: series.id,

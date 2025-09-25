@@ -2,6 +2,16 @@ import Foundation
 import CryptoKit
 import OSLog
 
+extension URL {
+    func appendingQueryItems(_ queryItems: [URLQueryItem]) -> URL? {
+        guard var components = URLComponents(url: self, resolvingAgainstBaseURL: false) else {
+            return nil
+        }
+        components.queryItems = (components.queryItems ?? []) + queryItems
+        return components.url
+    }
+}
+
 struct KavitaLibraryService: LibraryServicing {
     // MARK: Lifecycle
 
@@ -30,128 +40,88 @@ struct KavitaLibraryService: LibraryServicing {
     let pagePathTemplate: String
 
     func fetchSections() async throws -> [LibrarySection] {
-        // Based on browser network analysis, Kavita uses POST with empty JSON body
+        // Performance optimization: Only fetch the essential APIs in parallel
         let emptyJsonBody = "{}".data(using: .utf8)!
 
-        // Try multiple series endpoints (from browser analysis)
-        let seriesEndpoints = [
-            "/api/series/recently-updated-series",
-            "/api/series/recently-added",
-            "/api/series/newly-added",
-            "/api/series/all"
-        ]
+        #if DEBUG
+            Self.logger.debug("🚀 Fetching library sections with optimized parallel calls")
+        #endif
 
-        var allSeries: [LibrarySeries] = []
+        // Fetch only the 2 most important endpoints in parallel
+        async let recentlyAddedTask = fetchSeriesFromEndpoint("/api/series/recently-added", body: emptyJsonBody)
+        async let allSeriesTask = fetchSeriesFromEndpoint("/api/series/all", body: emptyJsonBody)
 
-        for endpoint in seriesEndpoints {
-            do {
-                let request = try await makeRequest(path: endpoint, method: "POST", body: emptyJsonBody)
-                #if DEBUG
-                    Self.logger.debug("POST \(request.url?.absoluteString ?? "<nil>") with empty JSON body")
-                #endif
+        // Wait for both to complete
+        let (recentlyAddedSeries, allSeries) = await (recentlyAddedTask, allSeriesTask)
 
-                let (data, response) = try await session.data(for: request)
-
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    continue
-                }
-
-                guard 200 ..< 300 ~= httpResponse.statusCode else {
-                    #if DEBUG
-                        Self.logger.error("\(endpoint) failed with status \(httpResponse.statusCode)")
-                    #endif
-                    continue
-                }
-
-                // Check if we got JSON or HTML
-                if let responseString = String(data: data, encoding: .utf8),
-                   responseString.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<") {
-                    #if DEBUG
-                        Self.logger.error("\(endpoint) returned HTML instead of JSON - SPA routing issue")
-                    #endif
-                    continue
-                }
-
-                #if DEBUG
-                if let jsonObj = try? JSONSerialization.jsonObject(with: data),
-                   let pretty = try? JSONSerialization.data(withJSONObject: jsonObj, options: [.prettyPrinted]),
-                   let string = String(data: pretty, encoding: .utf8) {
-                    print("[\(endpoint)] JSON (pretty):\n\(string.prefix(500))")
-                }
-                #endif
-
-                // Try to decode as series array
-                let decoder = JSONDecoder()
-                decoder.keyDecodingStrategy = .convertFromSnakeCase
-
-                // Try different DTO structures based on endpoint
-                if endpoint.contains("recently-updated") {
-                    // Simple structure: {seriesId, seriesName, ...}
-                    if let series = try? decoder.decode([KavitaRecentlyUpdatedSeriesDTO].self, from: data) {
-                        let domainSeries = series.map { $0.toDomain() }
-                        allSeries.append(contentsOf: domainSeries)
-                        #if DEBUG
-                            Self.logger.debug("Successfully got \(series.count) series from \(endpoint)")
-                        #endif
-                    }
-                } else {
-                    // Full structure: {id, name, primaryColor, ...}
-                    if let series = try? decoder.decode([KavitaFullSeriesDTO].self, from: data) {
-                        let domainSeries = series.map { $0.toDomain() }
-                        allSeries.append(contentsOf: domainSeries)
-                        #if DEBUG
-                            Self.logger.debug("Successfully got \(series.count) series from \(endpoint)")
-                        #endif
-                    }
-                }
-            } catch {
-                #if DEBUG
-                    Self.logger.error("Failed to fetch \(endpoint): \(error.localizedDescription)")
-                #endif
-                continue
-            }
-        }
-
-        // Group series into sections
         var sections: [LibrarySection] = []
 
-        if !allSeries.isEmpty {
-            // Remove duplicates while preserving the order from recently-added endpoint
-            var uniqueSeries: [LibrarySeries] = []
-            var seenTitles: Set<String> = []
-
-            for series in allSeries {
-                if !seenTitles.contains(series.title) {
-                    seenTitles.insert(series.title)
-                    uniqueSeries.append(series)
-                }
+        // Recently Added section (limit to 8 for performance)
+        if !recentlyAddedSeries.isEmpty {
+            let recentItems = Array(recentlyAddedSeries.prefix(8)).map { series in
+                SeriesInfo(id: series.id, kavitaSeriesId: series.kavitaSeriesId, title: series.title,
+                          author: series.author, coverColorHexes: series.coverColorHexes, coverURL: series.coverURL)
             }
-
-            // Recently Added section - use first 8 from recently-added endpoint (already sorted by date)
-            let recentlyAdded = Array(uniqueSeries.prefix(8))
-
-            if !recentlyAdded.isEmpty {
-                let seriesInfo = recentlyAdded.map { series in
-                    SeriesInfo(id: series.id, title: series.title, author: series.author,
-                              coverColorHexes: series.coverColorHexes, coverURL: series.coverURL)
-                }
-                sections.append(LibrarySection(id: UUID(), title: "Recently Added", items: seriesInfo))
-            }
-
-            // All Series section - sort alphabetically by title
-            let allSeriesSorted = uniqueSeries.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-            let allSeriesPreview = Array(allSeriesSorted.prefix(8))
-
-            if !allSeriesPreview.isEmpty {
-                let seriesInfo = allSeriesPreview.map { series in
-                    SeriesInfo(id: series.id, title: series.title, author: series.author,
-                              coverColorHexes: series.coverColorHexes, coverURL: series.coverURL)
-                }
-                sections.append(LibrarySection(id: UUID(), title: "All Series", items: seriesInfo))
-            }
+            sections.append(LibrarySection(id: UUID(), title: "Recently Added", items: recentItems))
         }
 
+        // All Series section (limit to 12 for performance, sort alphabetically)
+        if !allSeries.isEmpty {
+            let sortedSeries = allSeries.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+            let allItems = Array(sortedSeries.prefix(12)).map { series in
+                SeriesInfo(id: series.id, kavitaSeriesId: series.kavitaSeriesId, title: series.title,
+                          author: series.author, coverColorHexes: series.coverColorHexes, coverURL: series.coverURL)
+            }
+            sections.append(LibrarySection(id: UUID(), title: "All Series", items: allItems))
+        }
+
+        #if DEBUG
+            Self.logger.debug("✅ Library sections loaded: \(sections.count) sections with \(sections.reduce(0) { $0 + $1.items.count }) total items")
+        #endif
+
         return sections
+    }
+
+    // Helper method for cleaner parallel API calls
+    private func fetchSeriesFromEndpoint(_ endpoint: String, body: Data) async -> [LibrarySeries] {
+        do {
+            let request = try await makeRequest(path: endpoint, method: "POST", body: body)
+            let (data, response) = try await session.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse,
+                  200..<300 ~= httpResponse.statusCode else {
+                #if DEBUG
+                    Self.logger.debug("❌ \(endpoint) failed with status: \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+                #endif
+                return []
+            }
+
+            // Check for HTML response
+            if let responseString = String(data: data, encoding: .utf8),
+               responseString.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<") {
+                #if DEBUG
+                    Self.logger.debug("❌ \(endpoint) returned HTML instead of JSON")
+                #endif
+                return []
+            }
+
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+            if let series = try? decoder.decode([KavitaFullSeriesDTO].self, from: data) {
+                #if DEBUG
+                    Self.logger.debug("✅ \(endpoint): \(series.count) series")
+                #endif
+                return series.map { $0.toDomain(baseURL: baseURL, apiKey: apiKey) }
+            }
+
+        } catch {
+            #if DEBUG
+                Self.logger.debug("❌ \(endpoint) error: \(error.localizedDescription)")
+            #endif
+        }
+
+        return []
     }
 
     func fetchFullSection(sectionTitle: String) async throws -> [LibrarySeries] {
@@ -202,7 +172,7 @@ struct KavitaLibraryService: LibraryServicing {
 
             if endpoint.contains("recently-updated") {
                 if let series = try? decoder.decode([KavitaRecentlyUpdatedSeriesDTO].self, from: data) {
-                    return series.map { $0.toDomain() }
+                    return series.map { $0.toDomain(baseURL: baseURL, apiKey: apiKey) }
                 }
             } else {
                 if let series = try? decoder.decode([KavitaFullSeriesDTO].self, from: data) {
@@ -231,57 +201,258 @@ struct KavitaLibraryService: LibraryServicing {
         }
     }
 
-    func fetchSeriesDetail(seriesID: UUID) async throws -> SeriesDetail {
-        let path = String(format: seriesDetailPathTemplate, seriesID.uuidString.lowercased())
-        let request = try await makeRequest(path: path)
+    func fetchSeriesDetail(kavitaSeriesId: Int) async throws -> SeriesDetail {
+        // First, get series metadata
+        let seriesPath = "/api/series/\(kavitaSeriesId)"
+
         #if DEBUG
-            Self.logger.debug("Requesting series detail: \(request.url?.absoluteString ?? "<nil>")")
+            Self.logger.debug("Fetching series detail for ID: \(kavitaSeriesId)")
         #endif
 
-        let data: Data
-        let response: URLResponse
+        let seriesRequest = try await makeRequest(path: seriesPath, method: "GET")
+        let (seriesData, seriesResponse) = try await session.data(for: seriesRequest)
 
-        do {
-            (data, response) = try await session.data(for: request)
-        } catch {
-            #if DEBUG
-                Self.logger.error("Network error: \(error.localizedDescription)")
-            #endif
-            throw error
+        guard let httpResponse = seriesResponse as? HTTPURLResponse,
+              200..<300 ~= httpResponse.statusCode else {
+            throw LibraryServiceError.requestFailed(statusCode: (seriesResponse as? HTTPURLResponse)?.statusCode ?? -1)
         }
 
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw LibraryServiceError.invalidResponse
-        }
-
-        guard 200 ..< 300 ~= httpResponse.statusCode else {
+        // Check if we got HTML instead of JSON
+        if let responseString = String(data: seriesData, encoding: .utf8),
+           responseString.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<") {
             #if DEBUG
-                Self.logger.error("Request failed with status \(httpResponse.statusCode)")
-            #endif
-            throw LibraryServiceError.requestFailed(statusCode: httpResponse.statusCode)
-        }
-
-        do {
-            let decoder = JSONDecoder()
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
-            // 로그: 응답 본문 확인
-            #if DEBUG
-            if let body = String(data: data, encoding: .utf8) {
-                Self.logger.debug("Raw response body (series detail): \(body)")
-                print("=== Raw Response (fetchSeriesDetail) ===")
-                print(body)
-                print("========================================")
-            }
-            #endif
-
-            let payload = try decoder.decode(SeriesDetailResponse.self, from: data)
-            return payload.series.toDomain()
-        } catch {
-            #if DEBUG
-                Self.logger.error("Decoding failed: \(error.localizedDescription)")
+                Self.logger.debug("Series endpoint returned HTML instead of JSON")
             #endif
             throw LibraryServiceError.decodingFailed
         }
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+        guard let seriesDetail = try? decoder.decode(KavitaSeriesDetailDTO.self, from: seriesData) else {
+            #if DEBUG
+                Self.logger.debug("Failed to decode series detail")
+                if let body = String(data: seriesData, encoding: .utf8) {
+                    print("=== Series Response ===")
+                    print(String(body.prefix(1000)))
+                    print("=======================")
+                }
+            #endif
+            throw LibraryServiceError.decodingFailed
+        }
+
+        // Try to get chapters/volumes for this series
+        let chapters = await fetchChaptersForSeries(kavitaSeriesId: kavitaSeriesId)
+
+        // Convert to domain model with chapters
+        return SeriesDetail(
+            id: UUID(),
+            title: seriesDetail.name,
+            author: seriesDetail.libraryName ?? "",
+            summary: "총 \(seriesDetail.pages ?? 0)페이지",
+            coverImageURL: generateCoverURL(for: kavitaSeriesId),
+            chapters: chapters
+        )
+    }
+
+    private func generateCoverURL(for seriesId: Int) -> URL? {
+        return baseURL
+            .appendingPathComponent("api/image/series-cover")
+            .appendingQueryItems([
+                URLQueryItem(name: "seriesId", value: String(seriesId)),
+                URLQueryItem(name: "apiKey", value: apiKey)
+            ])
+    }
+
+    private func fetchChaptersForSeries(kavitaSeriesId: Int) async -> [SeriesChapter] {
+        // Use the discovered working endpoint
+        let endpoint = "/api/series/series-detail"
+        let queryItems = [URLQueryItem(name: "seriesId", value: String(kavitaSeriesId))]
+
+        #if DEBUG
+            Self.logger.debug("📚 Fetching chapters from series-detail API for series \(kavitaSeriesId)")
+        #endif
+
+        do {
+            let request = try await makeRequest(path: endpoint, queryItems: queryItems, method: "GET")
+            let (data, response) = try await session.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse,
+                  200..<300 ~= httpResponse.statusCode else {
+                #if DEBUG
+                    Self.logger.debug("❌ series-detail API failed with status: \((response as? HTTPURLResponse)?.statusCode ?? -1)")
+                #endif
+                return []
+            }
+
+            // Check if we got HTML
+            if let responseString = String(data: data, encoding: .utf8),
+               responseString.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<") {
+                #if DEBUG
+                    Self.logger.debug("❌ series-detail API returned HTML")
+                #endif
+                return []
+            }
+
+            #if DEBUG
+            if let body = String(data: data, encoding: .utf8) {
+                Self.logger.debug("📚 series-detail response: \(String(body.prefix(300)))...")
+            }
+            #endif
+
+            // Parse the series-detail response
+            if let chapters = tryParseChaptersFromResponse(data, endpoint: endpoint) {
+                #if DEBUG
+                    Self.logger.debug("🎉 Successfully parsed \(chapters.count) chapters from series-detail")
+                #endif
+                return chapters
+            }
+
+        } catch {
+            #if DEBUG
+                Self.logger.debug("❌ Error fetching from series-detail: \(error.localizedDescription)")
+            #endif
+        }
+
+        return []
+    }
+
+    private func tryParseChaptersFromResponse(_ data: Data, endpoint: String) -> [SeriesChapter]? {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+        // Try parsing as different possible structures
+
+        // 1. Direct array of volumes
+        if let volumes = try? decoder.decode([KavitaVolumeDTO].self, from: data) {
+            #if DEBUG
+                Self.logger.debug("📚 Parsed as volumes array from \(endpoint)")
+            #endif
+            return parseChaptersFromVolumes(volumes)
+        }
+
+        // 2. Direct array of chapters
+        if let chapters = try? decoder.decode([KavitaChapterDTO].self, from: data) {
+            #if DEBUG
+                Self.logger.debug("📖 Parsed as chapters array from \(endpoint)")
+            #endif
+            return parseChaptersFromChapterList(chapters)
+        }
+
+        // 3. Object with volumes property
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let volumesData = json["volumes"],
+           let volumesJsonData = try? JSONSerialization.data(withJSONObject: volumesData),
+           let volumes = try? decoder.decode([KavitaVolumeDTO].self, from: volumesJsonData) {
+            #if DEBUG
+                Self.logger.debug("📚 Parsed volumes from 'volumes' property in \(endpoint)")
+            #endif
+            return parseChaptersFromVolumes(volumes)
+        }
+
+        // 4. Object with chapters property
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let chaptersData = json["chapters"],
+           let chaptersJsonData = try? JSONSerialization.data(withJSONObject: chaptersData),
+           let chapters = try? decoder.decode([KavitaChapterDTO].self, from: chaptersJsonData) {
+            #if DEBUG
+                Self.logger.debug("📖 Parsed chapters from 'chapters' property in \(endpoint)")
+            #endif
+            return parseChaptersFromChapterList(chapters)
+        }
+
+        #if DEBUG
+            Self.logger.debug("❓ Could not parse chapters from \(endpoint)")
+        #endif
+        return nil
+    }
+
+    private func parseChaptersFromVolumes(_ volumes: [KavitaVolumeDTO]) -> [SeriesChapter] {
+        var allChapters: [SeriesChapter] = []
+
+        for (volumeIndex, volume) in volumes.enumerated() {
+            if let chapters = volume.chapters {
+                for (chapterIndex, chapter) in chapters.enumerated() {
+                    // Handle the weird "-100000" numbers from Kavita
+                    let chapterNumber: Double = {
+                        if let num = Double(chapter.number), num > -10000 {
+                            return num
+                        }
+                        // Use sortOrder if available and reasonable
+                        if let sortOrder = chapter.sortOrder, sortOrder > -10000 {
+                            return Double(sortOrder)
+                        }
+                        // Fall back to volume.number + chapter index
+                        return Double(volume.number) + Double(chapterIndex) * 0.1
+                    }()
+
+                    // Better title handling
+                    let chapterTitle: String = {
+                        if !chapter.title.isEmpty && !chapter.title.contains("-100000") {
+                            return chapter.title
+                        }
+                        if volume.name.contains("Volume") {
+                            return "\(volume.name)"
+                        }
+                        return "Chapter \(Int(chapterNumber))"
+                    }()
+
+                    // Generate volume cover URL
+                    let volumeCoverURL = generateVolumeCoverURL(for: volume.id)
+
+                    let seriesChapter = SeriesChapter(
+                        id: UUID(),
+                        title: chapterTitle,
+                        number: chapterNumber,
+                        pageCount: chapter.pages ?? 0,
+                        lastReadPage: chapter.pagesRead == 0 ? nil : chapter.pagesRead,
+                        kavitaVolumeId: volume.id,
+                        coverImageURL: volumeCoverURL
+                    )
+                    allChapters.append(seriesChapter)
+                }
+            }
+        }
+
+        // Sort by volume number first, then by chapter number
+        allChapters.sort {
+            if abs($0.number - $1.number) < 0.1 {
+                return $0.title < $1.title
+            }
+            return $0.number < $1.number
+        }
+
+        #if DEBUG
+            Self.logger.debug("📖 Parsed chapters: \(allChapters.map { "\($0.title) (\($0.number))" }.joined(separator: ", "))")
+        #endif
+
+        return allChapters
+    }
+
+    private func generateVolumeCoverURL(for volumeId: Int) -> URL? {
+        return baseURL
+            .appendingPathComponent("api/image/volume-cover")
+            .appendingQueryItems([
+                URLQueryItem(name: "volumeId", value: String(volumeId)),
+                URLQueryItem(name: "apiKey", value: apiKey)
+            ])
+    }
+
+    private func parseChaptersFromChapterList(_ chapters: [KavitaChapterDTO]) -> [SeriesChapter] {
+        var allChapters: [SeriesChapter] = []
+        for chapter in chapters {
+            let chapterNumber = Double(chapter.number) ?? Double(allChapters.count + 1)
+            let seriesChapter = SeriesChapter(
+                id: UUID(),
+                title: chapter.title.isEmpty ? "Chapter \(Int(chapterNumber))" : chapter.title,
+                number: chapterNumber,
+                pageCount: chapter.pages ?? 0,
+                lastReadPage: nil
+            )
+            allChapters.append(seriesChapter)
+        }
+        allChapters.sort { $0.number < $1.number }
+        return allChapters
     }
 
     func pageImageURL(seriesID: UUID, chapterID: UUID, pageNumber: Int) throws -> URL {
@@ -527,13 +698,25 @@ private struct KavitaRecentlyUpdatedSeriesDTO: Decodable {
 }
 
 extension KavitaRecentlyUpdatedSeriesDTO {
-    func toDomain() -> LibrarySeries {
-        LibrarySeries(
-            id: UUID(), // Generate a UUID since Kavita uses Int
+    func toDomain(baseURL: URL? = nil, apiKey: String? = nil) -> LibrarySeries {
+        // Generate cover image URL using discovered API pattern if baseURL and apiKey are available
+        var coverURL: URL? = nil
+        if let baseURL = baseURL, let apiKey = apiKey {
+            coverURL = baseURL
+                .appendingPathComponent("api/image/series-cover")
+                .appendingQueryItems([
+                    URLQueryItem(name: "seriesId", value: String(seriesId)),
+                    URLQueryItem(name: "apiKey", value: apiKey)
+                ])
+        }
+
+        return LibrarySeries(
+            id: UUID(), // Generate a UUID for SwiftUI
+            kavitaSeriesId: seriesId, // Store the actual Kavita series ID
             title: seriesName,
             author: "", // Not available in this endpoint
             coverColorHexes: ["#6B73FF", "#9B59B6"], // Default colors
-            coverURL: nil // Not available in this endpoint
+            coverURL: coverURL
         )
     }
 }
@@ -549,7 +732,7 @@ private struct KavitaFullSeriesDTO: Decodable {
 }
 
 extension KavitaFullSeriesDTO {
-    func toDomain() -> LibrarySeries {
+    func toDomain(baseURL: URL? = nil, apiKey: String? = nil) -> LibrarySeries {
         // Extract colors from primaryColor and secondaryColor
         var colors = ["#6B73FF", "#9B59B6"] // Default colors
         if let primary = primaryColor, !primary.isEmpty {
@@ -559,12 +742,100 @@ extension KavitaFullSeriesDTO {
             colors.append(secondary)
         }
 
+        // Generate cover image URL using discovered API pattern if baseURL and apiKey are available
+        var coverURL: URL? = nil
+        if let baseURL = baseURL, let apiKey = apiKey {
+            coverURL = baseURL
+                .appendingPathComponent("api/image/series-cover")
+                .appendingQueryItems([
+                    URLQueryItem(name: "seriesId", value: String(id)),
+                    URLQueryItem(name: "apiKey", value: apiKey)
+                ])
+        }
+
         return LibrarySeries(
-            id: UUID(), // Generate a UUID since Kavita uses Int
+            id: UUID(), // Generate a UUID for SwiftUI
+            kavitaSeriesId: id, // Store the actual Kavita series ID
             title: name,
             author: "", // Not available in this endpoint
             coverColorHexes: colors,
-            coverURL: nil // Not available in this endpoint
+            coverURL: coverURL
+        )
+    }
+}
+
+// Kavita series detail DTO based on actual API response
+private struct KavitaSeriesDetailDTO: Decodable {
+    let id: Int
+    let name: String
+    let originalName: String?
+    let localizedName: String?
+    let sortName: String?
+    let pages: Int?
+    let pagesRead: Int?
+    let latestReadDate: String?
+    let lastChapterAdded: String?
+    let userRating: Int?
+    let hasUserRated: Bool?
+    let format: Int?
+    let created: String?
+    let wordCount: Int?
+    let libraryId: Int?
+    let libraryName: String?
+    let minHoursToRead: Int?
+    let maxHoursToRead: Int?
+    let avgHoursToRead: Double?
+    let folderPath: String?
+    let lowestFolderPath: String?
+    let coverImage: String?
+    let primaryColor: String?
+    let secondaryColor: String?
+    let coverImageLocked: Bool?
+    let nameLocked: Bool?
+    let sortNameLocked: Bool?
+    let localizedNameLocked: Bool?
+    let dontMatch: Bool?
+    let isBlacklisted: Bool?
+}
+
+private struct KavitaVolumeDTO: Decodable {
+    let id: Int
+    let name: String
+    let number: Int
+    let pages: Int?
+    let chapters: [KavitaChapterDTO]?
+    let minNumber: Int?
+    let maxNumber: Int?
+    let pagesRead: Int?
+    let seriesId: Int?
+}
+
+private struct KavitaChapterDTO: Decodable {
+    let id: Int
+    let title: String
+    let number: String
+    let pages: Int?
+    let volumeId: Int
+    let range: String?
+    let minNumber: Int?
+    let maxNumber: Int?
+    let sortOrder: Int?
+    let isSpecial: Bool?
+    let pagesRead: Int?
+}
+
+extension KavitaSeriesDetailDTO {
+    func toDomain() -> SeriesDetail {
+        // For now, we'll create empty chapters array since chapters need to be fetched separately
+        let allChapters: [SeriesChapter] = []
+
+        return SeriesDetail(
+            id: UUID(), // Generate UUID for SwiftUI
+            title: name,
+            author: "", // Not available in this DTO
+            summary: "총 \(pages ?? 0)페이지", // Use basic info for now
+            coverImageURL: nil, // Will be generated separately
+            chapters: allChapters
         )
     }
 }
@@ -771,7 +1042,7 @@ private extension KavitaLibraryService {
                 }
             }
             let colors = deriveColors(from: title)
-            result.append(SeriesInfo(id: idValue, title: title, author: author, coverColorHexes: colors, coverURL: coverURL))
+            result.append(SeriesInfo(id: idValue, kavitaSeriesId: nil, title: title, author: author, coverColorHexes: colors, coverURL: coverURL))
         }
         return result
     }
