@@ -15,17 +15,32 @@ final class LibraryViewModel: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
 
-    func load() async {
+    private var cachedSections: [LibrarySection]?
+    private var lastServiceKey: String?
+
+    func load(force: Bool = false) async {
         guard !isLoading else { return }
+
+        // If we have cached data and not forcing refresh, use cache
+        if !force, let cached = cachedSections, !cached.isEmpty {
+            sections = cached
+            return
+        }
+
         isLoading = true
         errorMessage = nil
 
         do {
             let loaded = try await service.fetchSections()
             sections = loaded
+            cachedSections = loaded // Cache the results
+            #if DEBUG
+            print("📦 Library data cached: \(loaded.count) sections")
+            #endif
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             sections = []
+            cachedSections = nil
         }
 
         isLoading = false
@@ -44,6 +59,11 @@ final class LibraryViewModel: ObservableObject {
 
     func updateService(_ newService: LibraryServicing) {
         service = newService
+        // Clear cache when service changes (e.g., different server/API key)
+        cachedSections = nil
+        #if DEBUG
+        print("🔄 Service updated, cache cleared")
+        #endif
     }
 
     // MARK: Private
