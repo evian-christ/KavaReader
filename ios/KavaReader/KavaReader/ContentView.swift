@@ -31,14 +31,32 @@ struct ContentView: View {
             .refreshable {
                 await refreshLibrary(force: true)
             }
+            .navigationDestination(for: LibrarySeries.self) { series in
+                SeriesDetailView(series: series)
+            }
+            #if DEBUG
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Probe") {
+                        Task {
+                            // Attempt to downcast the current service to KavitaLibraryService to run the probe.
+                            // LibraryViewModel keeps the service privately; use a reflection-friendly approach
+                            // by trying to access via Mirror (since property is private). This is only for
+                            // debug convenience; if that fails, instruct developer how to call probe directly.
+                            let mirror = Mirror(reflecting: viewModel)
+                            if let svcChild = mirror.children.first(where: { $0.label == "service" }),
+                               let kavita = svcChild.value as? KavitaLibraryService {
+                                let _ = await kavita.probeSectionsVariants()
+                            } else {
+                                print("Unable to access viewModel.service via reflection. To run the probe, temporarily cast your service when creating the view model in DEBUG mode.")
+                            }
+                        }
+                    }
+                }
+            }
+            #endif
         }
-        .navigationDestination(for: LibrarySeries.self) { series in
-            SeriesDetailView(series: series)
-        }
-        .onChange(of: serverBaseURL) { _ in
-            Task { await refreshLibrary(force: true) }
-        }
-        .onChange(of: serverAPIKey) { _ in
+        .onChange(of: serverBaseURL) {
             Task { await refreshLibrary(force: true) }
         }
     }
@@ -46,7 +64,7 @@ struct ContentView: View {
     // MARK: Private
 
     @AppStorage("server_base_url") private var serverBaseURL: String = ""
-    @AppStorage("server_api_key") private var serverAPIKey: String = ""
+    @AppStorage("server_api_key") private var apiKey: String = ""
 
     @StateObject private var viewModel =
         LibraryViewModel(service: LibraryServiceFactory(baseURLString: nil, apiKey: nil).makeService())
@@ -73,7 +91,7 @@ struct ContentView: View {
                                 .foregroundStyle(.secondary)
                         }
                         LazyVGrid(columns: grid, spacing: 24) {
-                            ForEach(section.items) { item in
+                            ForEach(section.series) { item in
                                 NavigationLink(value: item) {
                                     LibraryCoverView(series: item)
                                 }
@@ -92,7 +110,7 @@ struct ContentView: View {
     private func refreshLibrary(force: Bool = false) async {
         let key = serviceSignature()
         if force || key != lastServiceKey {
-            let factory = LibraryServiceFactory(baseURLString: serverBaseURL, apiKey: serverAPIKey)
+            let factory = LibraryServiceFactory(baseURLString: serverBaseURL, apiKey: apiKey.isEmpty ? nil : apiKey)
             viewModel.updateService(factory.makeService())
             lastServiceKey = key
         }
@@ -100,7 +118,7 @@ struct ContentView: View {
     }
 
     private func serviceSignature() -> String {
-        "\(serverBaseURL)|\(serverAPIKey)"
+        return "\(serverBaseURL)|\(apiKey)"
     }
 }
 
@@ -112,9 +130,13 @@ private struct LibraryCoverView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ZStack(alignment: .bottomLeading) {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(LinearGradient(colors: gradientColors, startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(height: 200)
+                if let url = series.coverURL {
+                    CoverImageView(url: url, height: 200, cornerRadius: 16, gradientColors: gradientColors)
+                } else {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(LinearGradient(colors: gradientColors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(height: 200)
+                }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(series.title)
                         .font(.headline)
@@ -131,6 +153,7 @@ private struct LibraryCoverView: View {
 
     // MARK: Private
 
+    @MainActor
     private var gradientColors: [Color] {
         let colors = series.coverColorHexes.compactMap(Color.init(hex:))
         return colors.isEmpty ? [.purple, .blue] : colors

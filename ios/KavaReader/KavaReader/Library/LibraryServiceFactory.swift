@@ -33,6 +33,7 @@ struct LibraryServiceFactory {
         }
 
         let token = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
         return KavitaLibraryService(baseURL: url, apiKey: token)
     }
 }

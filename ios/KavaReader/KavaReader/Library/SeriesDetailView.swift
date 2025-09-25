@@ -4,7 +4,7 @@ struct SeriesDetailView: View {
     let series: LibrarySeries
 
     @AppStorage("server_base_url") private var serverBaseURL: String = ""
-    @AppStorage("server_api_key") private var serverAPIKey: String = ""
+    @AppStorage("server_api_key") private var apiKey: String = ""
 
     @StateObject private var viewModel: SeriesDetailViewModel
     @State private var lastServiceKey: String = ""
@@ -57,16 +57,13 @@ struct SeriesDetailView: View {
         .refreshable {
             await loadSeries(force: true)
         }
-        .onChange(of: serverBaseURL) { _ in
-            Task { await loadSeries(force: true) }
-        }
-        .onChange(of: serverAPIKey) { _ in
+        .onChange(of: serverBaseURL) {
             Task { await loadSeries(force: true) }
         }
     }
 
     private var currentFactory: LibraryServiceFactory {
-        LibraryServiceFactory(baseURLString: serverBaseURL, apiKey: serverAPIKey)
+        LibraryServiceFactory(baseURLString: serverBaseURL, apiKey: apiKey.isEmpty ? nil : apiKey)
     }
 
     private func loadSeries(force: Bool) async {
@@ -75,7 +72,7 @@ struct SeriesDetailView: View {
     }
 
     private func updateService(force: Bool) {
-        let key = "\(serverBaseURL)|\(serverAPIKey)"
+        let key = "\(serverBaseURL)|\(apiKey)"
         if force || key != lastServiceKey {
             viewModel.updateService(currentFactory.makeService())
             lastServiceKey = key
