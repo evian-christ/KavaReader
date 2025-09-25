@@ -45,6 +45,10 @@ private struct InvalidBaseURLLibraryService: LibraryServicing {
         throw LibraryServiceError.invalidBaseURL
     }
 
+    func fetchFullSection(sectionTitle: String) async throws -> [LibrarySeries] {
+        throw LibraryServiceError.invalidBaseURL
+    }
+
     func fetchSeriesDetail(seriesID: UUID) async throws -> SeriesDetail {
         throw LibraryServiceError.invalidBaseURL
     }
@@ -62,6 +66,10 @@ private struct UnsupportedSchemeLibraryService: LibraryServicing {
     let scheme: String
 
     func fetchSections() async throws -> [LibrarySection] {
+        throw LibraryServiceError.unsupportedScheme(scheme)
+    }
+
+    func fetchFullSection(sectionTitle: String) async throws -> [LibrarySeries] {
         throw LibraryServiceError.unsupportedScheme(scheme)
     }
 

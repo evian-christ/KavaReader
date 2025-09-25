@@ -2,6 +2,7 @@ import Foundation
 
 protocol LibraryServicing {
     func fetchSections() async throws -> [LibrarySection]
+    func fetchFullSection(sectionTitle: String) async throws -> [LibrarySeries]
     func fetchSeriesDetail(seriesID: UUID) async throws -> SeriesDetail
     func pageImageURL(seriesID: UUID, chapterID: UUID, pageNumber: Int) throws -> URL
     func fetchPageImage(seriesID: UUID, chapterID: UUID, pageNumber: Int) async throws -> Data
@@ -97,6 +98,18 @@ final class MockLibraryService: LibraryServicing {
         } catch {
             throw error
         }
+    }
+
+    func fetchFullSection(sectionTitle: String) async throws -> [LibrarySeries] {
+        let sections = try await fetchSections()
+
+        // Find the section and return all series from it
+        if let section = sections.first(where: { $0.title == sectionTitle }) {
+            return section.series
+        }
+
+        // If section not found, return empty array
+        return []
     }
 
     func fetchSeriesDetail(seriesID: UUID) async throws -> SeriesDetail {

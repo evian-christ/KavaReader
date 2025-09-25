@@ -116,12 +116,19 @@ struct KavitaLibraryService: LibraryServicing {
         var sections: [LibrarySection] = []
 
         if !allSeries.isEmpty {
-            // Remove duplicates and create sections
-            let uniqueSeries = Array(Set(allSeries))
+            // Remove duplicates while preserving the order from recently-added endpoint
+            var uniqueSeries: [LibrarySeries] = []
+            var seenTitles: Set<String> = []
 
-            // Split into sections
-            let recentlyAdded = uniqueSeries.prefix(15)
-            let remaining = uniqueSeries.dropFirst(15)
+            for series in allSeries {
+                if !seenTitles.contains(series.title) {
+                    seenTitles.insert(series.title)
+                    uniqueSeries.append(series)
+                }
+            }
+
+            // Recently Added section - use first 8 from recently-added endpoint (already sorted by date)
+            let recentlyAdded = Array(uniqueSeries.prefix(8))
 
             if !recentlyAdded.isEmpty {
                 let seriesInfo = recentlyAdded.map { series in
@@ -131,8 +138,12 @@ struct KavitaLibraryService: LibraryServicing {
                 sections.append(LibrarySection(id: UUID(), title: "Recently Added", items: seriesInfo))
             }
 
-            if !remaining.isEmpty {
-                let seriesInfo = remaining.map { series in
+            // All Series section - sort alphabetically by title
+            let allSeriesSorted = uniqueSeries.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+            let allSeriesPreview = Array(allSeriesSorted.prefix(8))
+
+            if !allSeriesPreview.isEmpty {
+                let seriesInfo = allSeriesPreview.map { series in
                     SeriesInfo(id: series.id, title: series.title, author: series.author,
                               coverColorHexes: series.coverColorHexes, coverURL: series.coverURL)
                 }
@@ -141,6 +152,83 @@ struct KavitaLibraryService: LibraryServicing {
         }
 
         return sections
+    }
+
+    func fetchFullSection(sectionTitle: String) async throws -> [LibrarySeries] {
+        // Based on browser network analysis, Kavita uses POST with empty JSON body
+        let emptyJsonBody = "{}".data(using: .utf8)!
+
+        // Determine endpoint based on section title
+        let endpoint: String
+        switch sectionTitle {
+        case "Recently Added":
+            endpoint = "/api/series/recently-added"
+        case "All Series":
+            endpoint = "/api/series/all"
+        default:
+            endpoint = "/api/series/all"
+        }
+
+        do {
+            let request = try await makeRequest(path: endpoint, method: "POST", body: emptyJsonBody)
+            #if DEBUG
+                Self.logger.debug("Fetching full section for: \(sectionTitle) from \(endpoint)")
+            #endif
+
+            let (data, response) = try await session.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw LibraryServiceError.invalidResponse
+            }
+
+            guard 200 ..< 300 ~= httpResponse.statusCode else {
+                #if DEBUG
+                    Self.logger.error("\(endpoint) failed with status \(httpResponse.statusCode)")
+                #endif
+                throw LibraryServiceError.requestFailed(statusCode: httpResponse.statusCode)
+            }
+
+            // Check if we got JSON or HTML
+            if let responseString = String(data: data, encoding: .utf8),
+               responseString.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<") {
+                #if DEBUG
+                    Self.logger.error("\(endpoint) returned HTML instead of JSON - SPA routing issue")
+                #endif
+                throw LibraryServiceError.decodingFailed
+            }
+
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+            if endpoint.contains("recently-updated") {
+                if let series = try? decoder.decode([KavitaRecentlyUpdatedSeriesDTO].self, from: data) {
+                    return series.map { $0.toDomain() }
+                }
+            } else {
+                if let series = try? decoder.decode([KavitaFullSeriesDTO].self, from: data) {
+                    let domainSeries = series.map { $0.toDomain() }
+
+                    // Apply correct sorting based on section
+                    switch sectionTitle {
+                    case "Recently Added":
+                        // Keep original order (already sorted by date from API)
+                        return domainSeries
+                    case "All Series":
+                        // Sort alphabetically by title
+                        return domainSeries.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+                    default:
+                        return domainSeries
+                    }
+                }
+            }
+
+            throw LibraryServiceError.decodingFailed
+        } catch {
+            #if DEBUG
+                Self.logger.error("Failed to fetch full section \(sectionTitle): \(error.localizedDescription)")
+            #endif
+            throw error
+        }
     }
 
     func fetchSeriesDetail(seriesID: UUID) async throws -> SeriesDetail {

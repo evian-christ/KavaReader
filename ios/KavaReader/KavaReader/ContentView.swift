@@ -1,5 +1,9 @@
 import SwiftUI
 
+struct SectionNavigation: Hashable {
+    let title: String
+}
+
 struct ContentView: View {
     // MARK: Internal
 
@@ -33,6 +37,9 @@ struct ContentView: View {
             }
             .navigationDestination(for: LibrarySeries.self) { series in
                 SeriesDetailView(series: series)
+            }
+            .navigationDestination(for: SectionNavigation.self) { sectionNav in
+                SectionDetailView(sectionTitle: sectionNav.title)
             }
             #if DEBUG
             .toolbar {
@@ -86,7 +93,7 @@ struct ContentView: View {
                             Text(section.title)
                                 .font(.title2.weight(.semibold))
                             Spacer()
-                            Button("모두 보기") {}
+                            NavigationLink("모두 보기", value: SectionNavigation(title: section.title))
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
