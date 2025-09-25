@@ -56,6 +56,9 @@ struct SeriesDetailView: View {
         .onChange(of: serverBaseURL) {
             Task { await loadSeries(force: true) }
         }
+        .onChange(of: apiKey) {
+            Task { await loadSeries(force: true) }
+        }
     }
 
     private var heroSection: some View {
@@ -88,13 +91,13 @@ struct SeriesDetailView: View {
             }
 
             // Read button
-            Button(action: {
-                // Navigate to first chapter
+            NavigationLink {
                 if let detail = viewModel.detail, let firstChapter = detail.chapters.first {
-                    // TODO: Navigate to ReaderView with first chapter
-                    print("Start reading: \(firstChapter.title)")
+                    ReaderView(series: series,
+                              chapter: firstChapter,
+                              serviceFactory: currentFactory)
                 }
-            }) {
+            } label: {
                 HStack {
                     Image(systemName: "play.fill")
                     Text("읽기 시작")

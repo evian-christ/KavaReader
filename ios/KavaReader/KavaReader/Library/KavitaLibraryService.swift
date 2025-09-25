@@ -370,7 +370,7 @@ struct KavitaLibraryService: LibraryServicing {
     private func parseChaptersFromVolumes(_ volumes: [KavitaVolumeDTO]) -> [SeriesChapter] {
         var allChapters: [SeriesChapter] = []
 
-        for (volumeIndex, volume) in volumes.enumerated() {
+        for (_, volume) in volumes.enumerated() {
             if let chapters = volume.chapters {
                 for (chapterIndex, chapter) in chapters.enumerated() {
                     // Handle the weird "-100000" numbers from Kavita
@@ -407,6 +407,7 @@ struct KavitaLibraryService: LibraryServicing {
                         pageCount: chapter.pages ?? 0,
                         lastReadPage: chapter.pagesRead == 0 ? nil : chapter.pagesRead,
                         kavitaVolumeId: volume.id,
+                        kavitaChapterId: chapter.id,
                         coverImageURL: volumeCoverURL
                     )
                     allChapters.append(seriesChapter)
@@ -460,12 +461,32 @@ struct KavitaLibraryService: LibraryServicing {
             throw LibraryServiceError.invalidResponse
         }
 
-        let path = String(format: pagePathTemplate,
-                          seriesID.uuidString.lowercased(),
-                          chapterID.uuidString.lowercased(),
-                          pageNumber)
+        // For Kavita, we need to use chapterID as the actual Kavita chapter ID
+        // The URL pattern should be: /api/reader/image?chapterId=X&page=Y&apiKey=Z
+        let queryItems = [
+            URLQueryItem(name: "chapterId", value: chapterID.uuidString), // This needs to be the actual Kavita chapter ID
+            URLQueryItem(name: "page", value: String(pageNumber)),
+            URLQueryItem(name: "apiKey", value: apiKey)
+        ]
 
-        guard let url = buildURL(path: path, queryItems: nil) else {
+        guard let url = buildURL(path: "/api/reader/image", queryItems: queryItems) else {
+            throw LibraryServiceError.invalidBaseURL
+        }
+        return url
+    }
+
+    func pageImageURL(kavitaChapterId: Int, pageNumber: Int) throws -> URL {
+        guard pageNumber > 0 else {
+            throw LibraryServiceError.invalidResponse
+        }
+
+        let queryItems = [
+            URLQueryItem(name: "chapterId", value: String(kavitaChapterId)),
+            URLQueryItem(name: "page", value: String(pageNumber)),
+            URLQueryItem(name: "apiKey", value: apiKey)
+        ]
+
+        guard let url = buildURL(path: "/api/reader/image", queryItems: queryItems) else {
             throw LibraryServiceError.invalidBaseURL
         }
         return url

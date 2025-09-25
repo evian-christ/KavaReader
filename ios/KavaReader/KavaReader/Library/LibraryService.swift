@@ -204,6 +204,7 @@ final class MockLibraryService: LibraryServicing {
                                           pageCount: 18 + index,
                                           lastReadPage: nil,
                                           kavitaVolumeId: nil,
+                                          kavitaChapterId: nil,
                                           coverImageURL: nil)
                 }
 

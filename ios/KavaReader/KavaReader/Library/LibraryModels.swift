@@ -126,6 +126,7 @@ struct SeriesChapter: Identifiable, Hashable {
          pageCount: Int,
          lastReadPage: Int? = nil,
          kavitaVolumeId: Int? = nil,
+         kavitaChapterId: Int? = nil,
          coverImageURL: URL? = nil)
     {
         self.id = id
@@ -134,6 +135,7 @@ struct SeriesChapter: Identifiable, Hashable {
         self.pageCount = pageCount
         self.lastReadPage = lastReadPage
         self.kavitaVolumeId = kavitaVolumeId
+        self.kavitaChapterId = kavitaChapterId
         self.coverImageURL = coverImageURL
     }
 
@@ -145,6 +147,7 @@ struct SeriesChapter: Identifiable, Hashable {
     let pageCount: Int
     let lastReadPage: Int?
     let kavitaVolumeId: Int? // Store Kavita volume ID for API calls
+    let kavitaChapterId: Int? // Store Kavita chapter ID for page images
     let coverImageURL: URL? // Volume cover image URL
 }
 
