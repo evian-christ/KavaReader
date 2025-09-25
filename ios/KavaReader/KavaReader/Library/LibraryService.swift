@@ -14,6 +14,7 @@ enum LibraryServiceError: Error, LocalizedError, Equatable {
     case unsupportedScheme(String)
     case invalidResponse
     case requestFailed(statusCode: Int)
+    case noData // 추가
 
     // MARK: Internal
 
@@ -31,6 +32,8 @@ enum LibraryServiceError: Error, LocalizedError, Equatable {
             return "서버 응답 형식이 올바르지 않습니다."
         case let .requestFailed(statusCode):
             return "서버 요청이 실패했습니다. (코드: \(statusCode))"
+        case .noData:
+            return "서버에서 데이터를 받지 못했습니다." // 추가
         }
     }
 }
@@ -66,6 +69,10 @@ final class MockLibraryService: LibraryServicing {
 
     let resourceName: String
     let bundle: Bundle
+
+    // 아래 두 줄 추가
+    var baseURL: String = "https://example.com"
+    var apiKey: String = "YOUR_API_KEY"
 
     func fetchSections() async throws -> [LibrarySection] {
         if let cached = cachedSections {
@@ -119,6 +126,40 @@ final class MockLibraryService: LibraryServicing {
         }
 
         return Data()
+    }
+
+    func fetchLibrarySections(completion: @escaping (Result<[LibrarySection], Error>) -> Void) {
+        guard let url = URL(string: "\(baseURL)/api/library/sections") else {
+            completion(.failure(LibraryServiceError.invalidBaseURL)) // 수정
+            return
+        }
+        var request = URLRequest(url: url)
+        request.setValue(apiKey, forHTTPHeaderField: "ApiKey")
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            guard let data = data else {
+                completion(.failure(LibraryServiceError.noData)) // 수정
+                return
+            }
+
+            // 응답 전체를 문자열로 출력 (HTML 확인용)
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("=== Raw Response ===")
+                print(responseString)
+                print("====================")
+            }
+
+            do {
+                let sections = try JSONDecoder().decode([LibrarySection].self, from: data)
+                completion(.success(sections))
+            } catch {
+                completion(.failure(error))
+            }
+        }
+        task.resume()
     }
 
     // MARK: Private
