@@ -30,10 +30,10 @@ struct ContentView: View {
             .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always),
                         prompt: "작가, 제목, 태그 검색")
             .task {
-                await refreshLibrary(force: true)
+                await refreshLibrary(force: false) // Only load if not already loaded
             }
             .refreshable {
-                await refreshLibrary(force: true)
+                await refreshLibrary(force: true) // Force refresh on pull-to-refresh
             }
             .navigationDestination(for: LibrarySeries.self) { series in
                 SeriesDetailView(series: series)
@@ -78,7 +78,7 @@ struct ContentView: View {
     @State private var searchText: String = ""
     @State private var lastServiceKey: String = ""
 
-    private let grid = [GridItem(.adaptive(minimum: 140), spacing: 24)]
+    // Removed grid layout for horizontal scroll
 
     private var filteredSections: [LibrarySection] {
         viewModel.filteredSections(query: searchText)
@@ -88,27 +88,35 @@ struct ContentView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 32) {
                 ForEach(filteredSections) { section in
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 16) {
                         HStack {
                             Text(section.title)
                                 .font(.title2.weight(.semibold))
                             Spacer()
-                            NavigationLink("모두 보기", value: SectionNavigation(title: section.title))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
                         }
-                        LazyVGrid(columns: grid, spacing: 24) {
-                            ForEach(section.series) { item in
-                                NavigationLink(value: item) {
-                                    LibraryCoverView(series: item)
+                        .padding(.horizontal, 28)
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 16) {
+                                // Show up to 8 series items
+                                ForEach(section.series) { item in
+                                    NavigationLink(value: item) {
+                                        LibraryCoverView(series: item)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+
+                                // Add "More" button as 9th item
+                                NavigationLink(value: SectionNavigation(title: section.title)) {
+                                    MoreButtonView()
                                 }
                                 .buttonStyle(.plain)
                             }
+                            .padding(.horizontal, 28)
                         }
                     }
                 }
             }
-            .padding(.horizontal, 28)
             .padding(.top, 32)
         }
         .background(Color(.systemBackground))
@@ -121,7 +129,7 @@ struct ContentView: View {
             viewModel.updateService(factory.makeService())
             lastServiceKey = key
         }
-        await viewModel.load()
+        await viewModel.load(force: force)
     }
 
     private func serviceSignature() -> String {
@@ -138,24 +146,31 @@ private struct LibraryCoverView: View {
         VStack(alignment: .leading, spacing: 12) {
             ZStack(alignment: .bottomLeading) {
                 if let url = series.coverURL {
-                    CoverImageView(url: url, height: 200, cornerRadius: 16, gradientColors: gradientColors)
+                    CoverImageView(url: url, height: 180, cornerRadius: 12, gradientColors: gradientColors)
                 } else {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    // Fallback view when no cover URL - show title and author
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(LinearGradient(colors: gradientColors, startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(height: 200)
+                        .frame(height: 180)
+                        .overlay(
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(series.title)
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(.white)
+                                    .lineLimit(2)
+                                if !series.author.isEmpty {
+                                    Text(series.author)
+                                        .font(.caption2)
+                                        .foregroundStyle(.white.opacity(0.8))
+                                }
+                            }
+                            .padding(12),
+                            alignment: .bottomLeading
+                        )
                 }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(series.title)
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                    Text(series.author)
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.8))
-                }
-                .padding(16)
             }
         }
+        .frame(width: 130)
     }
 
     // MARK: Private
@@ -164,6 +179,27 @@ private struct LibraryCoverView: View {
     private var gradientColors: [Color] {
         let colors = series.coverColorHexes.compactMap(Color.init(hex:))
         return colors.isEmpty ? [.purple, .blue] : colors
+    }
+}
+
+private struct MoreButtonView: View {
+    var body: some View {
+        VStack(alignment: .center, spacing: 12) {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+                .frame(width: 130, height: 180)
+                .overlay {
+                    VStack(spacing: 8) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title)
+                            .foregroundStyle(.secondary)
+                        Text("더 보기")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+        }
+        .frame(width: 130)
     }
 }
 
