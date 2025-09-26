@@ -30,17 +30,10 @@ struct ReaderView: View {
             TabView(selection: $viewModel.currentPage) {
                 ForEach(1...viewModel.totalPages, id: \.self) { pageNumber in
                     GeometryReader { geometry in
-                        AsyncImage(url: viewModel.pageImageURL(for: pageNumber)) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .clipped()
-                        } placeholder: {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                                .tint(.white)
-                        }
+                        PreloadedImageView(
+                            pageNumber: pageNumber,
+                            viewModel: viewModel
+                        )
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     .contentShape(Rectangle())
@@ -89,37 +82,23 @@ struct ReaderView: View {
 
                     Spacer()
 
-                    // Bottom bar
+                    // Bottom bar - Centered page indicator
                     HStack {
-                        // Page indicator
-                        Text("\(viewModel.currentPage) / \(viewModel.totalPages)")
-                            .font(.system(size: 16, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 12)
-                            .background(
-                                ZStack {
-                                    Capsule()
-                                        .fill(.ultraThinMaterial)
-                                        .opacity(0.8)
-                                    Capsule()
-                                        .stroke(.white.opacity(0.3), lineWidth: 0.5)
-                                    Capsule()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [.white.opacity(0.2), .clear],
-                                                startPoint: .top,
-                                                endPoint: .bottom
-                                            )
-                                        )
+                        Spacer()
+
+                        PageStripView(
+                            currentPage: $viewModel.currentPage,
+                            totalPages: viewModel.totalPages,
+                            onPageChange: { newPage in
+                                Task {
+                                    await viewModel.goToPage(newPage)
                                 }
-                            )
-                            .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
+                            }
+                        )
 
                         Spacer()
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 16)
                 }
                 .background(
                     // Enhanced gradient backgrounds with liquid glass effect
@@ -159,7 +138,7 @@ struct ReaderView: View {
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
-                            .frame(height: 120)
+                            .frame(height: 180)
 
                             LinearGradient(
                                 colors: [
@@ -169,7 +148,7 @@ struct ReaderView: View {
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
-                            .frame(height: 60)
+                            .frame(height: 90)
                         }
                     }
                     .ignoresSafeArea()
@@ -190,6 +169,35 @@ struct ReaderView: View {
     private func handleTap() {
         withAnimation(.easeInOut(duration: 0.3)) {
             showUI.toggle()
+        }
+    }
+}
+
+struct PreloadedImageView: View {
+    let pageNumber: Int
+    let viewModel: ReaderViewModel
+
+    var body: some View {
+        Group {
+            if let preloadedImage = viewModel.getPreloadedImage(for: pageNumber) {
+                Image(uiImage: preloadedImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+            } else {
+                AsyncImage(url: viewModel.pageImageURL(for: pageNumber)) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
+                } placeholder: {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .tint(.white)
+                }
+            }
         }
     }
 }

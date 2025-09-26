@@ -674,11 +674,6 @@ struct KavitaLibraryService: LibraryServicing {
         components.path = normalizedBasePath + normalizedPath
         components.queryItems = queryItems
 
-        #if DEBUG
-        if let queryItems = queryItems, !queryItems.isEmpty {
-            print("[buildURL] path='\(path)', queryItems=\(queryItems.map { "\($0.name)=\($0.value ?? "")" }), final URL='\(components.url?.absoluteString ?? "nil")'")
-        }
-        #endif
 
         return components.url
     }
