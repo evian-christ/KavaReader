@@ -163,6 +163,7 @@ struct LibrarySectionDTO: Decodable {
 
 struct LibrarySeriesDTO: Decodable {
     let id: UUID?
+    let kavitaSeriesId: Int?
     let title: String
     let author: String
     let coverColorHexes: [String]
@@ -196,7 +197,7 @@ extension LibrarySectionDTO {
         let seriesInfoItems = items.map { dto -> SeriesInfo in
             SeriesInfo(
                 id: dto.id ?? UUID(),
-                kavitaSeriesId: nil, // Legacy DTO doesn't have Kavita series ID
+                kavitaSeriesId: dto.kavitaSeriesId,
                 title: dto.title,
                 author: dto.author,
                 coverColorHexes: dto.coverColorHexes,
@@ -214,7 +215,7 @@ extension LibrarySectionDTO {
 
 extension LibrarySeriesDTO {
     func toDomain() -> LibrarySeries {
-        LibrarySeries(id: id ?? UUID(), kavitaSeriesId: nil, title: title, author: author, coverColorHexes: coverColorHexes, coverURL: coverURL)
+        LibrarySeries(id: id ?? UUID(), kavitaSeriesId: kavitaSeriesId, title: title, author: author, coverColorHexes: coverColorHexes, coverURL: coverURL)
     }
 }
 

@@ -39,6 +39,11 @@ struct KavitaLibraryService: LibraryServicing {
     let seriesDetailPathTemplate: String
     let pagePathTemplate: String
 
+    private var optionalApiKey: String? {
+        let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     func fetchSections() async throws -> [LibrarySection] {
         // Performance optimization: Only fetch the essential APIs in parallel
         let emptyJsonBody = "{}".data(using: .utf8)!
@@ -112,7 +117,7 @@ struct KavitaLibraryService: LibraryServicing {
                 #if DEBUG
                     Self.logger.debug("✅ \(endpoint): \(series.count) series")
                 #endif
-                return series.map { $0.toDomain(baseURL: baseURL, apiKey: apiKey) }
+                return series.map { $0.toDomain(baseURL: baseURL, apiKey: optionalApiKey) }
             }
 
         } catch {
@@ -172,11 +177,11 @@ struct KavitaLibraryService: LibraryServicing {
 
             if endpoint.contains("recently-updated") {
                 if let series = try? decoder.decode([KavitaRecentlyUpdatedSeriesDTO].self, from: data) {
-                    return series.map { $0.toDomain(baseURL: baseURL, apiKey: apiKey) }
+                    return series.map { $0.toDomain(baseURL: baseURL, apiKey: optionalApiKey) }
                 }
             } else {
                 if let series = try? decoder.decode([KavitaFullSeriesDTO].self, from: data) {
-                    let domainSeries = series.map { $0.toDomain() }
+                    let domainSeries = series.map { $0.toDomain(baseURL: baseURL, apiKey: optionalApiKey) }
 
                     // Apply correct sorting based on section
                     switch sectionTitle {
@@ -256,12 +261,13 @@ struct KavitaLibraryService: LibraryServicing {
     }
 
     private func generateCoverURL(for seriesId: Int) -> URL? {
+        var items = [URLQueryItem(name: "seriesId", value: String(seriesId))]
+        if let key = optionalApiKey {
+            items.append(URLQueryItem(name: "apiKey", value: key))
+        }
         return baseURL
             .appendingPathComponent("api/image/series-cover")
-            .appendingQueryItems([
-                URLQueryItem(name: "seriesId", value: String(seriesId)),
-                URLQueryItem(name: "apiKey", value: apiKey)
-            ])
+            .appendingQueryItems(items)
     }
 
     private func fetchChaptersForSeries(kavitaSeriesId: Int) async -> [SeriesChapter] {
@@ -431,12 +437,13 @@ struct KavitaLibraryService: LibraryServicing {
     }
 
     private func generateVolumeCoverURL(for volumeId: Int) -> URL? {
+        var items = [URLQueryItem(name: "volumeId", value: String(volumeId))]
+        if let key = optionalApiKey {
+            items.append(URLQueryItem(name: "apiKey", value: key))
+        }
         return baseURL
             .appendingPathComponent("api/image/volume-cover")
-            .appendingQueryItems([
-                URLQueryItem(name: "volumeId", value: String(volumeId)),
-                URLQueryItem(name: "apiKey", value: apiKey)
-            ])
+            .appendingQueryItems(items)
     }
 
     private func parseChaptersFromChapterList(_ chapters: [KavitaChapterDTO]) -> [SeriesChapter] {
@@ -463,11 +470,13 @@ struct KavitaLibraryService: LibraryServicing {
 
         // For Kavita, we need to use chapterID as the actual Kavita chapter ID
         // The URL pattern should be: /api/reader/image?chapterId=X&page=Y&apiKey=Z
-        let queryItems = [
-            URLQueryItem(name: "chapterId", value: chapterID.uuidString), // This needs to be the actual Kavita chapter ID
-            URLQueryItem(name: "page", value: String(pageNumber)),
-            URLQueryItem(name: "apiKey", value: apiKey)
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "chapterId", value: chapterID.uuidString),
+            URLQueryItem(name: "page", value: String(pageNumber))
         ]
+        if let key = optionalApiKey {
+            queryItems.append(URLQueryItem(name: "apiKey", value: key))
+        }
 
         guard let url = buildURL(path: "/api/reader/image", queryItems: queryItems) else {
             throw LibraryServiceError.invalidBaseURL
@@ -480,11 +489,13 @@ struct KavitaLibraryService: LibraryServicing {
             throw LibraryServiceError.invalidResponse
         }
 
-        let queryItems = [
+        var queryItems: [URLQueryItem] = [
             URLQueryItem(name: "chapterId", value: String(kavitaChapterId)),
-            URLQueryItem(name: "page", value: String(pageNumber)),
-            URLQueryItem(name: "apiKey", value: apiKey)
+            URLQueryItem(name: "page", value: String(pageNumber))
         ]
+        if let key = optionalApiKey {
+            queryItems.append(URLQueryItem(name: "apiKey", value: key))
+        }
 
         guard let url = buildURL(path: "/api/reader/image", queryItems: queryItems) else {
             throw LibraryServiceError.invalidBaseURL

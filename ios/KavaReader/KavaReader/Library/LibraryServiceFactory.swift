@@ -6,7 +6,7 @@ struct LibraryServiceFactory {
 
     func makeService() -> LibraryServicing {
         let trimmed = baseURLString?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !trimmed.isEmpty else { return MockLibraryService() }
+        guard !trimmed.isEmpty else { return InvalidBaseURLLibraryService() }
 
         guard var components = URLComponents(string: trimmed) else {
             return InvalidBaseURLLibraryService()
