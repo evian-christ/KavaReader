@@ -2,16 +2,7 @@ import Foundation
 @testable import KavaReader
 import Testing
 
-struct LibraryServiceTests {
-    @MainActor
-    @Test func mockServiceLoadsSections() async throws {
-        let service: LibraryServicing = MockLibraryService(bundle: .main)
-        let sections = try await service.fetchSections()
-
-        #expect(!sections.isEmpty)
-        #expect(sections.flatMap { $0.items }.count >= 3)
-    }
-
+struct KavitaLibraryServiceTests {
     @MainActor
     @Test func unsupportedSchemeThrowsError() async {
         let service = LibraryServiceFactory(baseURLString: "ftp://example.com", apiKey: nil).makeService()
@@ -46,34 +37,18 @@ struct LibraryServiceTests {
     }
 
     @MainActor
-    @Test func mockServiceReturnsSeriesDetail() async throws {
-        let service: LibraryServicing = MockLibraryService(bundle: .main)
-        let sections = try await service.fetchSections()
-        guard let series = sections.first?.items.first else {
-            Issue.record("예상한 시리즈 데이터를 찾지 못했습니다.")
+    @Test func kavitaServiceBuildsImageURL() async throws {
+        guard let baseURL = URL(string: "https://kavita.example.com") else {
+            Issue.record("잘못된 테스트 baseURL")
             return
         }
+        let service = KavitaLibraryService(baseURL: baseURL, apiKey: "test-key")
+        let dummySeries = LibrarySeries(title: "Dummy", author: "", coverColorHexes: [])
+        let dummyChapter = SeriesChapter(id: UUID(), title: "Chapter 1", number: 1, pageCount: 20)
 
-        let detail = try await service.fetchSeriesDetail(seriesID: series.id)
+        let url = try service.pageImageURL(seriesID: dummySeries.id, chapterID: dummyChapter.id, pageNumber: 1)
 
-        #expect(detail.id == series.id)
-        #expect(!detail.chapters.isEmpty)
-    }
-
-    @MainActor
-    @Test func pageImageURLValidation() async throws {
-        let service: LibraryServicing = MockLibraryService(bundle: .main)
-        let sections = try await service.fetchSections()
-        guard
-            let series = sections.first?.items.first,
-            let chapter = try await service.fetchSeriesDetail(seriesID: series.id).chapters.first
-        else {
-            Issue.record("시리즈/챕터 데이터를 찾지 못했습니다.")
-            return
-        }
-
-        let url = try service.pageImageURL(seriesID: series.id, chapterID: chapter.id, pageNumber: 1)
-
-        #expect(url.absoluteString.contains(series.id.uuidString))
+        #expect(url.absoluteString.contains("chapterId"))
+        #expect(url.absoluteString.contains(dummyChapter.id.uuidString))
     }
 }
