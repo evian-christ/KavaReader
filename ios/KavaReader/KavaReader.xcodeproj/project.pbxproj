@@ -6,6 +6,16 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		64C065F22E81B97E001C799B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 64C065BD2E81B97B001C799B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 64C065C42E81B97B001C799B;
+			remoteInfo = KavaReader;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		64C065C52E81B97B001C799B /* KavaReader.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KavaReader.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		64C065D22E81B97D001C799B /* KavaReaderTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KavaReaderTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -95,6 +105,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				64C065F32E81B97E001C799B /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				64C065D52E81B97D001C799B /* KavaReaderTests */,
@@ -171,6 +182,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		64C065F32E81B97E001C799B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 64C065C42E81B97B001C799B /* KavaReader */;
+			targetProxy = 64C065F22E81B97E001C799B /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		64C065E42E81B97D001C799B /* Debug */ = {
