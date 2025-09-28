@@ -8,6 +8,7 @@ struct ReaderView: View {
     @StateObject private var viewModel: ReaderViewModel
     @State private var showUI = true
     @State private var lastTapTime = Date()
+    @State private var isZoomInteracting = false
     @Environment(\.dismiss) private var dismiss
 
     init(series: LibrarySeries, chapter: SeriesChapter, serviceFactory: LibraryServiceFactory) {
@@ -29,24 +30,68 @@ struct ReaderView: View {
             // Horizontal scrolling page view
             TabView(selection: $viewModel.currentPage) {
                 ForEach(1...viewModel.totalPages, id: \.self) { pageNumber in
-                    GeometryReader { geometry in
-                        PreloadedImageView(
-                            pageNumber: pageNumber,
-                            viewModel: viewModel
-                        )
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        handleTap()
-                    }
+                    ZoomableImageView(
+                        pageNumber: pageNumber,
+                        viewModel: viewModel,
+                        isActive: viewModel.currentPage == pageNumber,
+                        onTap: {
+                            handleTap()
+                        },
+                        onPageChange: { newPage in
+                            Task {
+                                await viewModel.goToPage(newPage)
+                            }
+                        },
+                        onInteractionChange: { isInteracting in
+                            isZoomInteracting = isInteracting
+                        }
+                    )
                     .tag(pageNumber)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
 
+            // Error message overlay
+            if let errorMessage = viewModel.errorMessage {
+                VStack {
+                    Spacer()
+
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+
+                        Text(errorMessage)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.leading)
+
+                        Spacer()
+
+                        Button("닫기") {
+                            viewModel.clearError()
+                        }
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.blue)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(.black.opacity(0.8))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(.white.opacity(0.2), lineWidth: 1)
+                            )
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 100)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.easeInOut(duration: 0.3), value: viewModel.errorMessage)
+            }
+
             // UI Overlay
-            if showUI {
+            if showUI && !isZoomInteracting {
                 VStack {
                     // Top bar - Black gradient background
                     HStack(spacing: 0) {
@@ -173,34 +218,6 @@ struct ReaderView: View {
     }
 }
 
-struct PreloadedImageView: View {
-    let pageNumber: Int
-    let viewModel: ReaderViewModel
-
-    var body: some View {
-        Group {
-            if let preloadedImage = viewModel.getPreloadedImage(for: pageNumber) {
-                Image(uiImage: preloadedImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
-            } else {
-                AsyncImage(url: viewModel.pageImageURL(for: pageNumber)) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .clipped()
-                } placeholder: {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                        .tint(.white)
-                }
-            }
-        }
-    }
-}
 
 #Preview {
     NavigationStack {

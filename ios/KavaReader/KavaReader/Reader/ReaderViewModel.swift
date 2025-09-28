@@ -2,14 +2,35 @@ import Foundation
 import SwiftUI
 import Combine
 
+protocol PageImageFetching {
+    func fetchImage(from url: URL) async throws -> (Data, URLResponse)
+}
+
+struct URLSessionPageImageFetcher: PageImageFetching {
+    let session: URLSession
+
+    init(session: URLSession = .shared) {
+        self.session = session
+    }
+
+    func fetchImage(from url: URL) async throws -> (Data, URLResponse) {
+        try await session.data(from: url)
+    }
+}
+
 @MainActor
 final class ReaderViewModel: ObservableObject {
     // MARK: Lifecycle
 
-    init(series: LibrarySeries, chapter: SeriesChapter, service: LibraryServicing) {
+    init(series: LibrarySeries,
+         chapter: SeriesChapter,
+         service: LibraryServicing,
+         imageFetcher: PageImageFetching = URLSessionPageImageFetcher())
+    {
         self.series = series
         self.chapter = chapter
         self.service = service
+        self.imageFetcher = imageFetcher
         self.totalPages = chapter.pageCount
     }
 
@@ -17,12 +38,14 @@ final class ReaderViewModel: ObservableObject {
 
     @Published var currentPage: Int = 1 {
         didSet {
+            guard preloadingEnabled else { return }
             preloadNearbyPages()
         }
     }
     @Published private(set) var totalPages: Int = 0
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
+    @Published private(set) var retryCount: [Int: Int] = [:] // Page number -> retry count
 
     let series: LibrarySeries
     let chapter: SeriesChapter
@@ -30,7 +53,9 @@ final class ReaderViewModel: ObservableObject {
     // MARK: - Image Preloading
     private var preloadedImages: [Int: UIImage] = [:]
     private var preloadTasks: [Int: Task<Void, Never>] = [:]
+    private var failedPages: Set<Int> = []
     private let maxCacheSize = 10 // Maximum number of images to keep in memory
+    private let maxRetryCount = 3
 
     func loadChapter() async {
         totalPages = chapter.pageCount
@@ -38,6 +63,7 @@ final class ReaderViewModel: ObservableObject {
         errorMessage = nil
 
         // Start preloading nearby pages
+        guard preloadingEnabled else { return }
         preloadNearbyPages()
     }
 
@@ -72,11 +98,68 @@ final class ReaderViewModel: ObservableObject {
         return preloadedImages[pageNumber]
     }
 
+    func loadImageForReader(pageNumber: Int) async -> UIImage? {
+        if let cached = preloadedImages[pageNumber] {
+            return cached
+        }
+
+        do {
+            let image = try await fetchImageData(pageNumber: pageNumber)
+            store(image: image, for: pageNumber)
+            return image
+        } catch let serviceError as LibraryServiceError {
+            await handleImageLoadFailure(pageNumber: pageNumber, error: serviceError, allowRetry: false)
+            return nil
+        } catch {
+            await handleImageLoadFailure(pageNumber: pageNumber, error: mapNetworkError(error), allowRetry: false)
+            return nil
+        }
+    }
+
+    func configurePreloading(enabled: Bool) {
+        preloadingEnabled = enabled
+    }
+
     // MARK: Private
 
     private let service: LibraryServicing
+    private let imageFetcher: PageImageFetching
+    private var preloadingEnabled = true
+
+    private func store(image: UIImage, for pageNumber: Int) {
+        preloadedImages[pageNumber] = image
+        preloadTasks.removeValue(forKey: pageNumber)
+        retryCount.removeValue(forKey: pageNumber)
+        failedPages.remove(pageNumber)
+        errorMessage = nil
+
+        if preloadedImages.count > maxCacheSize {
+            let oldestPage = preloadedImages.keys.min() ?? pageNumber
+            preloadedImages.removeValue(forKey: oldestPage)
+        }
+    }
+
+    private func fetchImageData(pageNumber: Int) async throws -> UIImage {
+        guard let url = pageImageURL(for: pageNumber) else {
+            throw LibraryServiceError.invalidResponse
+        }
+
+        let (data, response) = try await imageFetcher.fetchImage(from: url)
+
+        if let httpResponse = response as? HTTPURLResponse,
+           !(200..<300).contains(httpResponse.statusCode) {
+            throw LibraryServiceError.requestFailed(statusCode: httpResponse.statusCode)
+        }
+
+        guard let image = UIImage(data: data) else {
+            throw LibraryServiceError.decodingFailed
+        }
+
+        return image
+    }
 
     private func preloadNearbyPages() {
+        guard preloadingEnabled else { return }
         let preloadRange = max(1, currentPage - 2)...min(totalPages, currentPage + 2)
 
         // Cancel tasks for pages outside the range
@@ -100,38 +183,86 @@ final class ReaderViewModel: ObservableObject {
     }
 
     private func preloadImage(for pageNumber: Int) {
+        guard preloadingEnabled else { return }
         // Don't preload if already cached or task is running
         guard preloadedImages[pageNumber] == nil && preloadTasks[pageNumber] == nil else {
             return
         }
 
         let task = Task {
-            do {
-                guard let url = pageImageURL(for: pageNumber) else { return }
-
-                let (data, _) = try await URLSession.shared.data(from: url)
-                guard let image = UIImage(data: data) else { return }
-
-                // Check if task was cancelled
-                guard !Task.isCancelled else { return }
-
-                await MainActor.run {
-                    preloadedImages[pageNumber] = image
-                    preloadTasks.removeValue(forKey: pageNumber)
-
-                    // Maintain cache size limit
-                    if preloadedImages.count > maxCacheSize {
-                        let oldestPage = preloadedImages.keys.min() ?? pageNumber
-                        preloadedImages.removeValue(forKey: oldestPage)
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    preloadTasks.removeValue(forKey: pageNumber)
-                }
-            }
+            await loadImageWithRetry(pageNumber: pageNumber)
         }
 
         preloadTasks[pageNumber] = task
     }
+
+    private func loadImageWithRetry(pageNumber: Int) async {
+        do {
+            let image = try await fetchImageData(pageNumber: pageNumber)
+            guard !Task.isCancelled else { return }
+            store(image: image, for: pageNumber)
+        } catch let serviceError as LibraryServiceError {
+            await handleImageLoadFailure(pageNumber: pageNumber, error: serviceError)
+        } catch {
+            await handleImageLoadFailure(pageNumber: pageNumber, error: mapNetworkError(error))
+        }
+    }
+
+    private func handleImageLoadFailure(pageNumber: Int, error: LibraryServiceError, allowRetry: Bool = true) async {
+        preloadTasks.removeValue(forKey: pageNumber)
+        let currentRetryCount = retryCount[pageNumber] ?? 0
+
+        if allowRetry && currentRetryCount < maxRetryCount && error.isRetryable {
+            retryCount[pageNumber] = currentRetryCount + 1
+            let retryTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(pow(2.0, Double(currentRetryCount)) * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                await self?.loadImageWithRetry(pageNumber: pageNumber)
+            }
+            preloadTasks[pageNumber] = retryTask
+        } else {
+            failedPages.insert(pageNumber)
+            if pageNumber == currentPage {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func mapNetworkError(_ error: Error) -> LibraryServiceError {
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet, .networkConnectionLost:
+                return .networkFailure(underlying: error)
+            case .timedOut:
+                return .timeout
+            case .cannotConnectToHost, .cannotFindHost:
+                return .serverUnavailable
+            default:
+                return .networkFailure(underlying: error)
+            }
+        }
+        return .networkFailure(underlying: error)
+    }
+
+    func retryFailedPage(_ pageNumber: Int) async {
+        guard failedPages.contains(pageNumber) else { return }
+
+        await MainActor.run { [weak self] in
+            guard let self = self else { return }
+            failedPages.remove(pageNumber)
+            retryCount.removeValue(forKey: pageNumber)
+            errorMessage = nil
+        }
+
+        await loadImageWithRetry(pageNumber: pageNumber)
+    }
+
+    func isPageFailed(_ pageNumber: Int) -> Bool {
+        return failedPages.contains(pageNumber)
+    }
+
+    func clearError() {
+        errorMessage = nil
+    }
+
 }
