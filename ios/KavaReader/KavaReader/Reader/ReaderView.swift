@@ -6,9 +6,9 @@ struct ReaderView: View {
     let serviceFactory: LibraryServiceFactory
 
     @StateObject private var viewModel: ReaderViewModel
+    @StateObject private var readerSettings = ReaderSettings.shared
     @State private var showUI = true
     @State private var lastTapTime = Date()
-    @State private var isZoomInteracting = false
     @Environment(\.dismiss) private var dismiss
 
     init(series: LibrarySeries, chapter: SeriesChapter, serviceFactory: LibraryServiceFactory) {
@@ -23,132 +23,153 @@ struct ReaderView: View {
     }
 
     var body: some View {
-        ZStack {
-            Color.black
-                .ignoresSafeArea(.all)
+        GeometryReader { geometry in
+            let safeAreaInsets = geometry.safeAreaInsets
 
-            // Horizontal scrolling page view
-            TabView(selection: $viewModel.currentPage) {
-                ForEach(1...viewModel.totalPages, id: \.self) { pageNumber in
-                    ZoomableImageView(
-                        pageNumber: pageNumber,
-                        viewModel: viewModel,
-                        isActive: viewModel.currentPage == pageNumber,
-                        onTap: {
-                            handleTap()
-                        },
-                        onPageChange: { newPage in
-                            Task {
-                                await viewModel.goToPage(newPage)
+            ZStack {
+                Color.black
+                    .ignoresSafeArea(.all)
+
+                Group {
+                    if readerSettings.scrollDirection == .horizontal {
+                        TabView(selection: $viewModel.currentPage) {
+                            ForEach(1...viewModel.totalPages, id: \.self) { pageNumber in
+                                ZoomableImageView(
+                                    pageNumber: pageNumber,
+                                    viewModel: viewModel,
+                                    isActive: viewModel.currentPage == pageNumber,
+                                    pageFitMode: readerSettings.pageFitMode,
+                                    onTap: handleTap,
+                                    onPageChange: { newPage in
+                                        Task {
+                                            await viewModel.goToPage(newPage)
+                                        }
+                                    },
+                                    onInteractionChange: { _ in }
+                                )
+                                .tag(pageNumber)
+                                .background(FullScreenBackground())
                             }
-                        },
-                        onInteractionChange: { isInteracting in
-                            isZoomInteracting = isInteracting
                         }
-                    )
-                    .tag(pageNumber)
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-
-            // Error message overlay
-            if let errorMessage = viewModel.errorMessage {
-                VStack {
-                    Spacer()
-
-                    HStack {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.orange)
-
-                        Text(errorMessage)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.white)
-                            .multilineTextAlignment(.leading)
-
-                        Spacer()
-
-                        Button("닫기") {
-                            viewModel.clearError()
-                        }
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.blue)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(.black.opacity(0.8))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(.white.opacity(0.2), lineWidth: 1)
-                            )
-                    )
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 100)
-                }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .animation(.easeInOut(duration: 0.3), value: viewModel.errorMessage)
-            }
-
-            // UI Overlay
-            if showUI && !isZoomInteracting {
-                VStack {
-                    // Top bar - Black gradient background
-                    HStack(spacing: 0) {
-                        // Back button
-                        Button(action: {
-                            dismiss()
-                        }) {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(.white)
-                                .frame(width: 44, height: 44)
-                        }
-
-                        // Title section
-                        VStack(spacing: 2) {
-                            Text(series.title)
-                                .font(.system(size: 18, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.white)
-                                .lineLimit(1)
-                            Text(chapter.title)
-                                .font(.system(size: 14, weight: .medium, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.8))
-                                .lineLimit(1)
-                        }
-                        .frame(maxWidth: .infinity)
-
-                        // Spacer for balance (same width as back button)
-                        Spacer()
-                            .frame(width: 44, height: 44)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
-
-                    Spacer()
-
-                    // Bottom bar - Centered page indicator
-                    HStack {
-                        Spacer()
-
-                        PageStripView(
-                            currentPage: $viewModel.currentPage,
-                            totalPages: viewModel.totalPages,
-                            onPageChange: { newPage in
-                                Task {
-                                    await viewModel.goToPage(newPage)
+                        .tabViewStyle(.page(indexDisplayMode: .never))
+                    } else {
+                        ScrollView(.vertical, showsIndicators: false) {
+                            LazyVStack(spacing: 0) {
+                                ForEach(1...viewModel.totalPages, id: \.self) { pageNumber in
+                                    ZoomableImageView(
+                                        pageNumber: pageNumber,
+                                        viewModel: viewModel,
+                                        isActive: true,
+                                        pageFitMode: readerSettings.pageFitMode,
+                                        onTap: handleTap,
+                                        onPageChange: { _ in },
+                                        onInteractionChange: { _ in }
+                                    )
+                                    .background(FullScreenBackground())
                                 }
                             }
+                        }
+                    }
+                }
+                .padding(.top, -safeAreaInsets.top)
+                .padding(.leading, -safeAreaInsets.leading)
+                .padding(.trailing, -safeAreaInsets.trailing)
+                .ignoresSafeArea(.all)
+
+                if let errorMessage = viewModel.errorMessage {
+                    VStack {
+                        Spacer()
+
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+
+                            Text(errorMessage)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.white)
+                                .multilineTextAlignment(.leading)
+
+                            Spacer()
+
+                            Button("닫기") {
+                                viewModel.clearError()
+                            }
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.blue)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(.black.opacity(0.8))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(.white.opacity(0.2), lineWidth: 1)
+                                )
                         )
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, max(24, safeAreaInsets.bottom + 60))
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(.easeInOut(duration: 0.3), value: viewModel.errorMessage)
+                }
+
+                if showUI {
+                    VStack(spacing: 0) {
+                        HStack(spacing: 0) {
+                            Button(action: {
+                                dismiss()
+                            }) {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 44, height: 44)
+                            }
+
+                            VStack(spacing: 2) {
+                                Text(series.title)
+                                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(.white)
+                                    .lineLimit(1)
+                                Text(chapter.title)
+                                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                                    .foregroundStyle(.white.opacity(0.8))
+                                    .lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity)
+
+                            Spacer()
+                                .frame(width: 44, height: 44)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 8)
+                        .padding(.top, max(safeAreaInsets.top - 24, 0))
 
                         Spacer()
+
+                        HStack {
+                            Spacer()
+
+                            PageStripView(
+                                currentPage: $viewModel.currentPage,
+                                totalPages: viewModel.totalPages,
+                                onPageChange: { newPage in
+                                    Task {
+                                        await viewModel.goToPage(newPage)
+                                    }
+                                }
+                            )
+
+                            Spacer()
+                        }
+                        .padding(.bottom, 8)
+
+                        Rectangle()
+                            .fill(Color.clear)
+                            .frame(height: safeAreaInsets.bottom)
                     }
-                    .padding(.bottom, 16)
-                }
-                .background(
-                    // Enhanced gradient backgrounds with liquid glass effect
-                    VStack(spacing: 0) {
-                        ZStack {
+                    .background(
+                        VStack(spacing: 0) {
                             LinearGradient(
                                 colors: [
                                     .black.opacity(0.8),
@@ -158,22 +179,10 @@ struct ReaderView: View {
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
-                            .frame(height: 120)
+                            .frame(height: 120 + safeAreaInsets.top)
 
-                            LinearGradient(
-                                colors: [
-                                    .white.opacity(0.08),
-                                    .clear
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                            .frame(height: 60)
-                        }
+                            Spacer()
 
-                        Spacer()
-
-                        ZStack {
                             LinearGradient(
                                 colors: [
                                     .clear,
@@ -183,22 +192,12 @@ struct ReaderView: View {
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
-                            .frame(height: 180)
-
-                            LinearGradient(
-                                colors: [
-                                    .clear,
-                                    .white.opacity(0.08)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                            .frame(height: 90)
+                            .frame(height: 180 + safeAreaInsets.bottom)
                         }
-                    }
-                    .ignoresSafeArea()
-                )
-                .transition(.opacity)
+                        .ignoresSafeArea(.all)
+                    )
+                    .transition(.opacity)
+                }
             }
         }
         .navigationBarHidden(true)
@@ -206,6 +205,9 @@ struct ReaderView: View {
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         .statusBarHidden(showUI ? false : true)
+        .onAppear {
+            showUI = true
+        }
         .task {
             await viewModel.loadChapter()
         }
@@ -220,6 +222,7 @@ struct ReaderView: View {
             Task {
                 await viewModel.saveProgressNow()
             }
+            showUI = true
         }
     }
 

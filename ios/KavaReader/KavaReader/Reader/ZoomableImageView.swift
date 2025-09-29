@@ -11,6 +11,7 @@ struct ZoomableImageView: View {
     let pageNumber: Int
     let viewModel: ReaderViewModel
     let isActive: Bool
+    let pageFitMode: PageFitMode
     let onTap: () -> Void
     let onPageChange: (Int) -> Void
     let onInteractionChange: (Bool) -> Void
@@ -29,7 +30,7 @@ struct ZoomableImageView: View {
     var body: some View {
         ZStack {
             Color.black
-                .ignoresSafeArea()
+                .ignoresSafeArea(.all)
 
             if let image = displayedImage {
                 ZoomableScrollView(
@@ -39,6 +40,7 @@ struct ZoomableImageView: View {
                     maxZoom: maxZoom,
                     tapZoneWidth: tapZoneWidth,
                     resetTrigger: resetToken,
+                    pageFitMode: pageFitMode,
                     onSingleTap: handleSingleTap
                 )
                 .transition(.opacity)
@@ -156,6 +158,7 @@ private struct ZoomableScrollView: UIViewRepresentable {
     let maxZoom: CGFloat
     let tapZoneWidth: CGFloat
     let resetTrigger: Int
+    let pageFitMode: PageFitMode
     let onSingleTap: (ZoomTapRegion) -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -264,23 +267,36 @@ private struct ZoomableScrollView: UIViewRepresentable {
 
             let xScale = boundsSize.width / image.size.width
             let yScale = boundsSize.height / image.size.height
-            let minScale = min(xScale, yScale)
-            let maxScale = max(minScale * parent.maxZoom, minScale)
-            let minZoomScale = max(0.1, minScale * 0.5)
 
-            baseZoomScale = minScale
+            // Calculate base scale based on page fit mode
+            let baseScale: CGFloat
+            switch parent.pageFitMode {
+            case .fitWidth:
+                baseScale = xScale
+            case .fitHeight:
+                baseScale = yScale
+            case .fitScreen:
+                baseScale = min(xScale, yScale)
+            case .original:
+                baseScale = 1.0
+            }
+
+            let maxScale = max(baseScale * parent.maxZoom, baseScale)
+            let minZoomScale = max(0.1, min(baseScale, min(xScale, yScale)) * 0.5)
+
+            baseZoomScale = baseScale
             maxZoomScale = maxScale
             self.minZoomScale = minZoomScale
             scrollView.minimumZoomScale = minZoomScale
             scrollView.maximumZoomScale = maxScale
 
-            let minRelative = minZoomScale / max(minScale, 0.0001)
+            let minRelative = minZoomScale / max(baseScale, 0.0001)
             let currentRelative = max(parent.zoomScale, minRelative)
             let targetScale: CGFloat
             if resetZoom {
-                targetScale = minScale
+                targetScale = baseScale
             } else {
-                targetScale = max(minZoomScale, min(maxScale, currentRelative * minScale))
+                targetScale = max(minZoomScale, min(maxScale, currentRelative * baseScale))
             }
 
             if newImage {
@@ -291,11 +307,16 @@ private struct ZoomableScrollView: UIViewRepresentable {
                 scrollView.zoomScale = targetScale
             }
 
-            parent.zoomScale = targetScale / minScale
+            let normalizedScale = targetScale / baseScale
+            if abs(parent.zoomScale - normalizedScale) > 0.0001 {
+                parent.zoomScale = normalizedScale
+            }
             centerImage(in: scrollView)
             updateInteractionState(for: scrollView)
             if resetZoom {
-                parent.isInteracting = false
+                if parent.isInteracting {
+                    parent.isInteracting = false
+                }
                 scrollView.setContentOffset(.zero, animated: false)
             }
             return true
@@ -311,25 +332,35 @@ private struct ZoomableScrollView: UIViewRepresentable {
 
         func scrollViewDidZoom(_ scrollView: UIScrollView) {
             guard baseZoomScale > 0 else { return }
-            parent.zoomScale = scrollView.zoomScale / baseZoomScale
+            let normalizedScale = scrollView.zoomScale / baseZoomScale
+            if abs(parent.zoomScale - normalizedScale) > 0.0001 {
+                parent.zoomScale = normalizedScale
+            }
             centerImage(in: scrollView)
             updateInteractionState(for: scrollView)
         }
 
         func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
             guard baseZoomScale > 0 else { return }
-            parent.zoomScale = scale / baseZoomScale
+            let normalizedScale = scale / baseZoomScale
+            if abs(parent.zoomScale - normalizedScale) > 0.0001 {
+                parent.zoomScale = normalizedScale
+            }
             if scale < baseZoomScale - 0.001 {
                 scrollView.setZoomScale(baseZoomScale, animated: true)
                 scrollView.setContentOffset(.zero, animated: true)
-                parent.zoomScale = 1.0
+                if abs(parent.zoomScale - 1.0) > 0.0001 {
+                    parent.zoomScale = 1.0
+                }
             }
             updateInteractionState(for: scrollView)
         }
 
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
             if scrollView.zoomScale > baseZoomScale + 0.01 {
-                parent.isInteracting = true
+                if !parent.isInteracting {
+                    parent.isInteracting = true
+                }
             }
         }
 
@@ -410,7 +441,9 @@ private struct ZoomableScrollView: UIViewRepresentable {
         private func updateInteractionState(for scrollView: UIScrollView) {
             guard baseZoomScale > 0 else { return }
             let isZoomed = scrollView.zoomScale > baseZoomScale + 0.01
-            parent.isInteracting = isZoomed
+            if parent.isInteracting != isZoomed {
+                parent.isInteracting = isZoomed
+            }
         }
 
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
