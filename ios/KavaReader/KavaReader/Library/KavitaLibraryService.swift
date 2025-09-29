@@ -48,9 +48,6 @@ struct KavitaLibraryService: LibraryServicing {
         // Performance optimization: Only fetch the essential APIs in parallel
         let emptyJsonBody = "{}".data(using: .utf8)!
 
-        #if DEBUG
-            Self.logger.debug("🚀 Fetching library sections with optimized parallel calls")
-        #endif
 
         // Fetch only the 2 most important endpoints in parallel
         async let recentlyAddedTask = fetchSeriesFromEndpoint("/api/series/recently-added", body: emptyJsonBody)
@@ -80,9 +77,6 @@ struct KavitaLibraryService: LibraryServicing {
             sections.append(LibrarySection(id: UUID(), title: "All Series", items: allItems))
         }
 
-        #if DEBUG
-            Self.logger.debug("✅ Library sections loaded: \(sections.count) sections with \(sections.reduce(0) { $0 + $1.items.count }) total items")
-        #endif
 
         return sections
     }
@@ -95,18 +89,12 @@ struct KavitaLibraryService: LibraryServicing {
 
             guard let httpResponse = response as? HTTPURLResponse,
                   200..<300 ~= httpResponse.statusCode else {
-                #if DEBUG
-                    Self.logger.debug("❌ \(endpoint) failed with status: \((response as? HTTPURLResponse)?.statusCode ?? -1)")
-                #endif
                 return []
             }
 
             // Check for HTML response
             if let responseString = String(data: data, encoding: .utf8),
                responseString.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<") {
-                #if DEBUG
-                    Self.logger.debug("❌ \(endpoint) returned HTML instead of JSON")
-                #endif
                 return []
             }
 
@@ -114,16 +102,11 @@ struct KavitaLibraryService: LibraryServicing {
             decoder.keyDecodingStrategy = .convertFromSnakeCase
 
             if let series = try? decoder.decode([KavitaFullSeriesDTO].self, from: data) {
-                #if DEBUG
-                    Self.logger.debug("✅ \(endpoint): \(series.count) series")
-                #endif
                 return series.map { $0.toDomain(baseURL: baseURL, apiKey: optionalApiKey) }
             }
 
         } catch {
-            #if DEBUG
-                Self.logger.debug("❌ \(endpoint) error: \(error.localizedDescription)")
-            #endif
+            // Network error
         }
 
         return []
@@ -146,9 +129,6 @@ struct KavitaLibraryService: LibraryServicing {
 
         do {
             let request = try await makeRequest(path: endpoint, method: "POST", body: emptyJsonBody)
-            #if DEBUG
-                Self.logger.debug("Fetching full section for: \(sectionTitle) from \(endpoint)")
-            #endif
 
             let (data, response) = try await session.data(for: request)
 
@@ -210,9 +190,6 @@ struct KavitaLibraryService: LibraryServicing {
         // First, get series metadata
         let seriesPath = "/api/series/\(kavitaSeriesId)"
 
-        #if DEBUG
-            Self.logger.debug("Fetching series detail for ID: \(kavitaSeriesId)")
-        #endif
 
         let seriesRequest = try await makeRequest(path: seriesPath, method: "GET")
         let (seriesData, seriesResponse) = try await session.data(for: seriesRequest)
@@ -225,9 +202,6 @@ struct KavitaLibraryService: LibraryServicing {
         // Check if we got HTML instead of JSON
         if let responseString = String(data: seriesData, encoding: .utf8),
            responseString.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<") {
-            #if DEBUG
-                Self.logger.debug("Series endpoint returned HTML instead of JSON")
-            #endif
             throw LibraryServiceError.decodingFailed
         }
 
@@ -235,14 +209,6 @@ struct KavitaLibraryService: LibraryServicing {
         decoder.keyDecodingStrategy = .convertFromSnakeCase
 
         guard let seriesDetail = try? decoder.decode(KavitaSeriesDetailDTO.self, from: seriesData) else {
-            #if DEBUG
-                Self.logger.debug("Failed to decode series detail")
-                if let body = String(data: seriesData, encoding: .utf8) {
-                    print("=== Series Response ===")
-                    print(String(body.prefix(1000)))
-                    print("=======================")
-                }
-            #endif
             throw LibraryServiceError.decodingFailed
         }
 
@@ -275,9 +241,6 @@ struct KavitaLibraryService: LibraryServicing {
         let endpoint = "/api/series/series-detail"
         let queryItems = [URLQueryItem(name: "seriesId", value: String(kavitaSeriesId))]
 
-        #if DEBUG
-            Self.logger.debug("📚 Fetching chapters from series-detail API for series \(kavitaSeriesId)")
-        #endif
 
         do {
             let request = try await makeRequest(path: endpoint, queryItems: queryItems, method: "GET")
@@ -285,39 +248,22 @@ struct KavitaLibraryService: LibraryServicing {
 
             guard let httpResponse = response as? HTTPURLResponse,
                   200..<300 ~= httpResponse.statusCode else {
-                #if DEBUG
-                    Self.logger.debug("❌ series-detail API failed with status: \((response as? HTTPURLResponse)?.statusCode ?? -1)")
-                #endif
                 return []
             }
 
             // Check if we got HTML
             if let responseString = String(data: data, encoding: .utf8),
                responseString.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<") {
-                #if DEBUG
-                    Self.logger.debug("❌ series-detail API returned HTML")
-                #endif
                 return []
             }
 
-            #if DEBUG
-            if let body = String(data: data, encoding: .utf8) {
-                Self.logger.debug("📚 series-detail response: \(String(body.prefix(300)))...")
-            }
-            #endif
 
             // Parse the series-detail response
             if let chapters = tryParseChaptersFromResponse(data, endpoint: endpoint) {
-                #if DEBUG
-                    Self.logger.debug("🎉 Successfully parsed \(chapters.count) chapters from series-detail")
-                #endif
                 return chapters
             }
 
         } catch {
-            #if DEBUG
-                Self.logger.debug("❌ Error fetching from series-detail: \(error.localizedDescription)")
-            #endif
         }
 
         return []
@@ -331,17 +277,11 @@ struct KavitaLibraryService: LibraryServicing {
 
         // 1. Direct array of volumes
         if let volumes = try? decoder.decode([KavitaVolumeDTO].self, from: data) {
-            #if DEBUG
-                Self.logger.debug("📚 Parsed as volumes array from \(endpoint)")
-            #endif
             return parseChaptersFromVolumes(volumes)
         }
 
         // 2. Direct array of chapters
         if let chapters = try? decoder.decode([KavitaChapterDTO].self, from: data) {
-            #if DEBUG
-                Self.logger.debug("📖 Parsed as chapters array from \(endpoint)")
-            #endif
             return parseChaptersFromChapterList(chapters)
         }
 
@@ -350,9 +290,6 @@ struct KavitaLibraryService: LibraryServicing {
            let volumesData = json["volumes"],
            let volumesJsonData = try? JSONSerialization.data(withJSONObject: volumesData),
            let volumes = try? decoder.decode([KavitaVolumeDTO].self, from: volumesJsonData) {
-            #if DEBUG
-                Self.logger.debug("📚 Parsed volumes from 'volumes' property in \(endpoint)")
-            #endif
             return parseChaptersFromVolumes(volumes)
         }
 
@@ -361,15 +298,9 @@ struct KavitaLibraryService: LibraryServicing {
            let chaptersData = json["chapters"],
            let chaptersJsonData = try? JSONSerialization.data(withJSONObject: chaptersData),
            let chapters = try? decoder.decode([KavitaChapterDTO].self, from: chaptersJsonData) {
-            #if DEBUG
-                Self.logger.debug("📖 Parsed chapters from 'chapters' property in \(endpoint)")
-            #endif
             return parseChaptersFromChapterList(chapters)
         }
 
-        #if DEBUG
-            Self.logger.debug("❓ Could not parse chapters from \(endpoint)")
-        #endif
         return nil
     }
 
@@ -429,9 +360,6 @@ struct KavitaLibraryService: LibraryServicing {
             return $0.number < $1.number
         }
 
-        #if DEBUG
-            Self.logger.debug("📖 Parsed chapters: \(allChapters.map { "\($0.title) (\($0.number))" }.joined(separator: ", "))")
-        #endif
 
         return allChapters
     }
@@ -558,38 +486,20 @@ struct KavitaLibraryService: LibraryServicing {
         request.timeoutInterval = 15
 
         // Authentication handling - use Kavya's approach (query parameter)
-        #if DEBUG
-        print("[KavitaLibraryService] apiKey.isEmpty: \(apiKey.isEmpty), apiKey length: \(apiKey.count)")
-        #endif
 
         if !apiKey.isEmpty {
-            #if DEBUG
-            print("[KavitaLibraryService] Using API Key to get Bearer token (Kavya approach)")
-            #endif
             // Get Bearer token using API Key like Kavya does
             if let bearerToken = await authenticateWithAPIKey() {
                 request.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
-                #if DEBUG
-                print("[KavitaLibraryService] Set Authorization header with Bearer token from API Key")
-                #endif
             } else {
-                #if DEBUG
-                print("[KavitaLibraryService] Failed to get Bearer token from API Key")
-                #endif
                 throw LibraryServiceError.requestFailed(statusCode: 401)
             }
         } else {
-            #if DEBUG
-            print("[KavitaLibraryService] No API key, trying JWT from keychain")
-            #endif
             // Fallback to Bearer JWT token from login
             if let data = KeychainHelper.shared.read(key: "kavita_api_token"),
                let token = String(data: data, encoding: .utf8),
                !token.isEmpty {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-                #if DEBUG
-                print("[KavitaLibraryService] Setting Authorization header with login JWT")
-                #endif
             }
         }
 
@@ -610,16 +520,6 @@ struct KavitaLibraryService: LibraryServicing {
         // Minimal headers - sometimes too many headers trigger SPA routing
         // Remove Referer/Origin which might trigger SPA behavior
 
-        #if DEBUG
-        // Minimal request log (URL + auth headers only)
-        if let headers = request.allHTTPHeaderFields {
-            var authHeaders: [String: String] = [:]
-            for k in ["Authorization", "ApiKey", "X-Api-Key"] {
-                if let v = headers[k] { authHeaders[k] = v }
-            }
-            print("[request] \(url.absoluteString) headers=\(authHeaders)")
-        }
-        #endif
         return request
     }
 
@@ -642,8 +542,6 @@ struct KavitaLibraryService: LibraryServicing {
             let authHeader = request.allHTTPHeaderFields?["Authorization"] ?? "none"
 
             let summary = "Probe result: [status: \(status?.description ?? "nil")] headers=Authorization: \(authHeader) body=\(preview)"
-            Self.logger.debug("\(summary)")
-            print(summary)
 
             return [ProbeResult(headers: "Authorization: \(authHeader)", statusCode: status, bodyPreview: preview)]
         } catch {
@@ -895,21 +793,11 @@ private extension KavitaLibraryService {
             let (data, response) = try await session.data(for: request)
 
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-                #if DEBUG
-                let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-                let preview = KavitaLibraryService.previewBody(data: data)
-                Self.logger.debug("Series list request failed for path=\(path) status=\(status) preview=\(preview)")
-                #endif
                 throw LibraryServiceError.requestFailed(statusCode: (response as? HTTPURLResponse)?.statusCode ?? -1)
             }
 
             // Check if we got HTML instead of JSON (SPA routing issue)
             if isHTMLResponse(data) {
-                #if DEBUG
-                let responsePreview = KavitaLibraryService.previewBody(data: data)
-                print("[series list] Got HTML instead of JSON for primary endpoint. Response preview: \(responsePreview)")
-                print("[series list] Trying alternative approaches...")
-                #endif
 
                 // Try the exact 3 sections from Kavita's home page
                 let alternatives: [(path: String, queryItems: [URLQueryItem]?)] = [
@@ -921,44 +809,21 @@ private extension KavitaLibraryService {
 
                 for (altPath, altQuery) in alternatives {
                     do {
-                        #if DEBUG
-                        let displayPath = altQuery != nil ? "\(altPath)?\(altQuery!.map { "\($0.name)=\($0.value ?? "")" }.joined(separator: "&"))" : altPath
-                        print("[series list] Trying alternative path: \(displayPath)")
-                        #endif
-
                         let altRequest = try await makeRequest(path: altPath, queryItems: altQuery)
-                        #if DEBUG
-                        print("[series list] Actual URL being requested: \(altRequest.url?.absoluteString ?? "nil")")
-                        #endif
                         let (altData, altResponse) = try await session.data(for: altRequest)
 
                         if let http = altResponse as? HTTPURLResponse,
                            (200..<300).contains(http.statusCode),
                            !isHTMLResponse(altData) {
-                            #if DEBUG
-                            print("[series list] Success with alternative path: \(altPath)")
-                            #endif
                             return parseSeriesArray(from: altData) ?? []
-                        } else {
-                            #if DEBUG
-                            let responsePreview = KavitaLibraryService.previewBody(data: altData)
-                            let statusCode = (altResponse as? HTTPURLResponse)?.statusCode ?? -1
-                            print("[series list] Alternative path \(altPath) failed (status: \(statusCode)) or returned HTML. Preview: \(responsePreview)")
-                            #endif
                         }
                     } catch {
-                        #if DEBUG
-                        print("[series list] Alternative path \(altPath) error: \(error)")
-                        #endif
                         continue
                     }
                 }
 
                 // As final fallback, try minimal headers on original path
                 do {
-                    #if DEBUG
-                    print("[series list] Trying minimal headers on original path...")
-                    #endif
 
                     var retryRequest = URLRequest(url: request.url!)
                     retryRequest.httpMethod = "GET"
@@ -973,55 +838,23 @@ private extension KavitaLibraryService {
                     if let http = retryResponse as? HTTPURLResponse,
                        (200..<300).contains(http.statusCode),
                        !isHTMLResponse(retryData) {
-                        #if DEBUG
-                        print("[series list] Minimal headers retry succeeded")
-                        #endif
                         return parseSeriesArray(from: retryData) ?? []
-                    } else {
-                        #if DEBUG
-                        print("[series list] Minimal headers retry failed or returned HTML")
-                        #endif
                     }
                 } catch {
-                    #if DEBUG
-                    print("[series list] Minimal headers retry error: \(error)")
-                    #endif
                 }
 
                 // All alternatives failed
-                #if DEBUG
-                print("[series list] All alternatives failed, returning empty array")
-                #endif
                 return []
             }
 
             // Print series JSON for debugging
-            #if DEBUG
-            if let jsonObj = try? JSONSerialization.jsonObject(with: data),
-               let pretty = try? JSONSerialization.data(withJSONObject: jsonObj, options: [.prettyPrinted]),
-               let string = String(data: pretty, encoding: .utf8) {
-                print("[series list] \(path) JSON (pretty):\n\(string)")
-            } else if let s = String(data: data, encoding: .utf8) {
-                print("[series list] \(path) non-JSON (first 512):\n\(s.prefix(512))")
-            }
-            #endif
 
             if let items = parseSeriesArray(from: data) {
-                #if DEBUG
-                Self.logger.debug("Series list parsed for path=\(path) count=\(items.count)")
-                #endif
                 return items
             } else {
-                #if DEBUG
-                let preview = KavitaLibraryService.previewBody(data: data)
-                Self.logger.debug("Series list unrecognized JSON for path=\(path) preview=\(preview)")
-                #endif
                 throw LibraryServiceError.decodingFailed
             }
         } catch {
-            #if DEBUG
-            Self.logger.debug("Series list request error for path=\(path) error=\(error.localizedDescription)")
-            #endif
             throw error
         }
     }
@@ -1087,15 +920,6 @@ private extension KavitaLibraryService {
                 throw LibraryServiceError.requestFailed(statusCode: (response as? HTTPURLResponse)?.statusCode ?? -1)
             }
 
-            #if DEBUG
-            if let jsonObj = try? JSONSerialization.jsonObject(with: data),
-               let pretty = try? JSONSerialization.data(withJSONObject: jsonObj, options: [.prettyPrinted]),
-               let string = String(data: pretty, encoding: .utf8) {
-                print("[recent series] \(path) JSON (pretty):\n\(string)")
-            } else if let s = String(data: data, encoding: .utf8) {
-                print("[recent series] \(path) non-JSON (first 512):\n\(s.prefix(512))")
-            }
-            #endif
 
             return parseSeriesArray(from: data) ?? []
         } catch {
@@ -1186,29 +1010,16 @@ private extension KavitaLibraryService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        #if DEBUG
-        print("[KavitaLibraryService] Trying to authenticate at: \(url.absoluteString)")
-        #endif
 
         do {
             let (data, response) = try await session.data(for: request)
 
-            #if DEBUG
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-            print("[KavitaLibraryService] Authentication response status: \(statusCode)")
-            if let responseString = String(data: data, encoding: .utf8) {
-                print("[KavitaLibraryService] Authentication response: \(responseString.prefix(500))")
-            }
-            #endif
 
             if let http = response as? HTTPURLResponse,
                (200..<300).contains(http.statusCode),
                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let token = json["token"] as? String {
 
-                #if DEBUG
-                print("[KavitaLibraryService] Successfully got Bearer token")
-                #endif
 
                 // Cache the JWT
                 if let tokenData = token.data(using: .utf8) {
@@ -1216,17 +1027,235 @@ private extension KavitaLibraryService {
                 }
 
                 return token
-            } else {
-                #if DEBUG
-                print("[KavitaLibraryService] Token extraction failed or bad status code")
-                #endif
             }
         } catch {
-            #if DEBUG
-            print("[KavitaLibraryService] API Key authentication failed: \(error)")
-            #endif
         }
 
         return nil
     }
+
+    // MARK: - Reading Progress Methods
+
+    /// 읽기 진행률을 Kavita 서버에 저장
+    public func saveProgress(seriesId: Int, volumeId: Int, chapterId: Int, pageNumber: Int) async throws {
+        let path = "/api/reader/progress"
+
+        let progressRequest = ProgressUpdateRequest(
+            volumeId: volumeId,
+            chapterId: chapterId,
+            pageNum: pageNumber,
+            seriesId: seriesId,
+            libraryId: 1, // 기본값, 실제로는 라이브러리 ID를 가져와야 함
+            bookScrollId: nil
+        )
+
+        let encoder = JSONEncoder()
+        guard let requestBody = try? encoder.encode(progressRequest) else {
+            throw LibraryServiceError.invalidResponse
+        }
+
+        let request = try await makeRequest(path: path, method: "POST", body: requestBody)
+
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw LibraryServiceError.invalidResponse
+        }
+
+        guard 200..<300 ~= httpResponse.statusCode else {
+            throw LibraryServiceError.requestFailed(statusCode: httpResponse.statusCode)
+        }
+    }
+
+    /// 특정 챕터의 읽기 진행률을 조회
+    public func getProgress(chapterId: Int) async throws -> ProgressDto? {
+        let path = "/api/reader/get-progress"
+        let queryItems = [URLQueryItem(name: "chapterId", value: String(chapterId))]
+
+        let request = try await makeRequest(path: path, queryItems: queryItems, method: "GET")
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw LibraryServiceError.invalidResponse
+        }
+
+        guard 200..<300 ~= httpResponse.statusCode else {
+            if httpResponse.statusCode == 404 {
+                return nil
+            }
+            throw LibraryServiceError.requestFailed(statusCode: httpResponse.statusCode)
+        }
+
+        let decoder = JSONDecoder()
+
+        do {
+            let progress = try decoder.decode(ProgressDto.self, from: data)
+            return progress
+        } catch {
+            return nil
+        }
+    }
+
+    /// 시리즈의 이어서 읽기 지점을 조회
+    public func getContinuePoint(seriesId: Int) async throws -> ContinuePointDto? {
+        let path = "/api/reader/continue-point"
+        let queryItems = [URLQueryItem(name: "seriesId", value: String(seriesId))]
+
+        let request = try await makeRequest(path: path, queryItems: queryItems, method: "GET")
+
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw LibraryServiceError.invalidResponse
+        }
+
+        guard 200..<300 ~= httpResponse.statusCode else {
+            if httpResponse.statusCode == 404 {
+                return nil
+            }
+            throw LibraryServiceError.requestFailed(statusCode: httpResponse.statusCode)
+        }
+
+        let decoder = JSONDecoder()
+
+        do {
+            let continuePoint = try decoder.decode(ContinuePointDto.self, from: data)
+            return continuePoint
+        } catch {
+            return nil
+        }
+    }
+
+    /// 챕터의 진행률을 가져와서 SeriesChapter 모델을 업데이트
+    public func getChapterWithProgress(kavitaChapterId: Int, existingChapter: SeriesChapter) async -> SeriesChapter {
+        do {
+            if let progress = try await getProgress(chapterId: kavitaChapterId) {
+                return SeriesChapter(
+                    id: existingChapter.id,
+                    title: existingChapter.title,
+                    number: existingChapter.number,
+                    pageCount: existingChapter.pageCount,
+                    lastReadPage: progress.pageNum > 0 ? progress.pageNum : nil,
+                    kavitaVolumeId: existingChapter.kavitaVolumeId,
+                    kavitaChapterId: existingChapter.kavitaChapterId,
+                    coverImageURL: existingChapter.coverImageURL
+                )
+            }
+        } catch {
+            // Failed to get progress
+        }
+
+        return existingChapter
+    }
+
+    /// 이어서 읽기 항목들을 가져오기 (진행 중인 시리즈들)
+    public func fetchContinueReadingItems() async -> [ContinueReadingItem] {
+        // Kavita의 "on-deck" 엔드포인트 사용
+        let path = "/api/series/on-deck"
+        let queryItems = [
+            URLQueryItem(name: "libraryId", value: "0"),
+            URLQueryItem(name: "pageNumber", value: "1"),
+            URLQueryItem(name: "pageSize", value: "10")
+        ]
+
+        do {
+            // POST 요청이므로 빈 JSON body 전송
+            let emptyBody = "{}".data(using: .utf8)!
+            let request = try await makeRequest(path: path, queryItems: queryItems, method: "POST", body: emptyBody)
+
+            let (data, response) = try await session.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                return []
+            }
+
+            guard 200..<300 ~= httpResponse.statusCode else {
+                return []
+            }
+
+            // HTML 응답 체크
+            if isHTMLResponse(data) {
+                return []
+            }
+
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+            // on-deck 응답 파싱 시도
+            if let onDeckItems = try? decoder.decode([KavitaOnDeckDTO].self, from: data) {
+                var continueItems: [ContinueReadingItem] = []
+
+                for item in onDeckItems {
+                    // 각 on-deck 항목에 대해 시리즈 정보와 진행률 가져오기
+                    if let continueItem = await createContinueReadingItem(from: item) {
+                        continueItems.append(continueItem)
+                    }
+                }
+
+                return continueItems
+            }
+
+        } catch {
+        }
+
+        return []
+    }
+
+    private func createContinueReadingItem(from onDeckItem: KavitaOnDeckDTO) async -> ContinueReadingItem? {
+        // 시리즈 정보 생성
+        let series = LibrarySeries(
+            id: UUID(),
+            kavitaSeriesId: onDeckItem.seriesId,
+            title: onDeckItem.seriesName,
+            author: "",
+            coverColorHexes: ["#6B73FF", "#9B59B6"],
+            coverURL: generateCoverURL(for: onDeckItem.seriesId)
+        )
+
+        // 챕터 정보 생성 (on-deck에서 제공하는 정보 사용)
+        let chapter = SeriesChapter(
+            id: UUID(),
+            title: onDeckItem.chapterTitle ?? "Chapter \(onDeckItem.chapterNumber ?? 1)",
+            number: Double(onDeckItem.chapterNumber ?? 1),
+            pageCount: onDeckItem.pages ?? 0,
+            lastReadPage: onDeckItem.pagesRead ?? 0,
+            kavitaVolumeId: onDeckItem.volumeId,
+            kavitaChapterId: onDeckItem.chapterId
+        )
+
+        // 진행률 정보 생성
+        let progress = ProgressDto(
+            volumeId: onDeckItem.volumeId ?? 0,
+            chapterId: onDeckItem.chapterId ?? 0,
+            pageNum: onDeckItem.pagesRead ?? 0,
+            seriesId: onDeckItem.seriesId,
+            libraryId: onDeckItem.libraryId ?? 1,
+            bookScrollId: nil,
+            lastModifiedUtc: ISO8601DateFormatter().string(from: Date())
+        )
+
+        return ContinueReadingItem(
+            series: series,
+            lastReadChapter: chapter,
+            progress: progress
+        )
+    }
+}
+
+// MARK: - Kavita On-Deck DTO
+
+private struct KavitaOnDeckDTO: Decodable {
+    let seriesId: Int
+    let seriesName: String
+    let volumeId: Int?
+    let chapterId: Int?
+    let chapterNumber: Int?
+    let chapterTitle: String?
+    let pages: Int?
+    let pagesRead: Int?
+    let libraryId: Int?
+    let created: String?
 }
