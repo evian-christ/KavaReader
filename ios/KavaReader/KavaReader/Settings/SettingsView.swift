@@ -7,37 +7,39 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section("서버") {
-                    TextField("https://kavita.mynas.local", text: $serverBaseURL)
+                    TextField("서버 URL", text: $serverBaseURL)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
+
+                    if !isValidURL && !serverBaseURL.isEmpty {
+                        Text("올바른 URL 형식을 입력해주세요")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
+
+                    Button("연결 테스트") {
+                        Task { await testConnection() }
+                    }
+                    .disabled(serverBaseURL.isEmpty || !isValidURL || isTestingConnection)
                 }
 
-                Section("로그인") {
+                Section("계정") {
                     TextField("사용자명", text: $username)
                         .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled(true)
                     SecureField("비밀번호", text: $password)
                     TextField("API Key (선택사항)", text: $apiKey)
                         .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled(true)
-                    HStack {
-                        Spacer()
-                        if isLoggingIn {
-                            ProgressView()
-                        } else {
-                            Button("로그인") {
-                                Task {
-                                    await performLogin()
-                                }
-                            }
-                            .disabled((username.isEmpty || password.isEmpty) && apiKey.isEmpty || serverBaseURL.isEmpty)
-                        }
-                        Spacer()
+
+                    Button("로그인") {
+                        Task { await performLogin() }
                     }
-                    .padding(.vertical, 6)
+                    .disabled(!canLogin || isLoggingIn)
                 }
             }
             .navigationTitle("설정")
+            .alert(connectionTestMessage, isPresented: $showConnectionAlert) {
+                Button("확인", role: .cancel) { }
+            }
             .alert(loginAlertMessage, isPresented: $showLoginAlert) {
                 Button("확인", role: .cancel) { }
             }
@@ -54,6 +56,69 @@ struct SettingsView: View {
     @State private var isLoggingIn: Bool = false
     @State private var showLoginAlert: Bool = false
     @State private var loginAlertMessage: String = ""
+    @State private var isTestingConnection: Bool = false
+    @State private var showConnectionAlert: Bool = false
+    @State private var connectionTestMessage: String = ""
+
+    private var isValidURL: Bool {
+        guard !serverBaseURL.isEmpty else { return true }
+        return URL(string: serverBaseURL) != nil
+    }
+
+    private var canLogin: Bool {
+        !serverBaseURL.isEmpty &&
+        isValidURL &&
+        ((!username.isEmpty && !password.isEmpty) || !apiKey.isEmpty)
+    }
+
+    private func testConnection() async {
+        guard let base = URL(string: serverBaseURL) else {
+            connectionTestMessage = "유효하지 않은 URL입니다"
+            showConnectionAlert = true
+            return
+        }
+
+        isTestingConnection = true
+        defer { isTestingConnection = false }
+
+        do {
+            var request = URLRequest(url: base)
+            request.httpMethod = "GET"
+            request.timeoutInterval = 10
+            request.setValue("Kavita/1.0 (KavaReader)", forHTTPHeaderField: "User-Agent")
+
+            let (_, response) = try await URLSession.shared.data(for: request)
+
+            if let httpResponse = response as? HTTPURLResponse {
+                if (200...299).contains(httpResponse.statusCode) {
+                    connectionTestMessage = "서버에 성공적으로 연결되었습니다"
+                } else {
+                    connectionTestMessage = "서버 응답 오류 (상태 코드: \(httpResponse.statusCode))"
+                }
+            } else {
+                connectionTestMessage = "알 수 없는 응답 형식입니다"
+            }
+        } catch {
+            if let urlError = error as? URLError {
+                switch urlError.code {
+                case .notConnectedToInternet:
+                    connectionTestMessage = "인터넷 연결을 확인해주세요"
+                case .timedOut:
+                    connectionTestMessage = "연결 시간이 초과되었습니다"
+                case .cannotFindHost:
+                    connectionTestMessage = "서버를 찾을 수 없습니다"
+                case .cannotConnectToHost:
+                    connectionTestMessage = "서버에 연결할 수 없습니다"
+                default:
+                    connectionTestMessage = "네트워크 오류: \(urlError.localizedDescription)"
+                }
+            } else {
+                connectionTestMessage = "연결 실패: \(error.localizedDescription)"
+            }
+        }
+
+        showConnectionAlert = true
+    }
 
     private func performLogin() async {
         guard let base = URL(string: serverBaseURL) else {
