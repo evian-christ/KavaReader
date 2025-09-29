@@ -77,10 +77,10 @@ struct ZoomableImageView: View {
                     .tint(.white)
             }
         }
-        .onChange(of: isInteracting) { newValue in
+        .onChange(of: isInteracting) { _, newValue in
             onInteractionChange(newValue)
         }
-        .onChange(of: isActive) { newValue in
+        .onChange(of: isActive) { _, newValue in
             guard newValue else { return }
             requestZoomReset()
         }
@@ -255,7 +255,7 @@ private struct ZoomableScrollView: UIViewRepresentable {
                     guard
                         let self,
                         let scrollView = scrollView,
-                        let image = self.imageView.image
+                        let _ = self.imageView.image
                     else { return }
                     _ = self.configureZoomScales(for: scrollView, resetZoom: resetZoom, newImage: newImage, resetTrigger: resetTrigger)
                 }

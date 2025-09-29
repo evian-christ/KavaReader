@@ -81,7 +81,6 @@ struct PageStripView: View {
                 DragGesture()
                     .onChanged { _ in
                         if !hasUserScrolled {
-                            print("👆 USER STARTED SCROLLING")
                             hasUserScrolled = true
                         }
                     }
@@ -93,15 +92,12 @@ struct PageStripView: View {
                 }
             )
             .onPreferenceChange(ScrollOffsetKey.self) { offset in
-                print("📊 SCROLL OFFSET CHANGED: \(offset) | isExpanded: \(isExpanded)")
                 detectCenterPage(scrollOffset: offset)
             }
             .coordinateSpace(name: "scrollArea")
             .onAppear {
-                print("🎬 NATURAL PAGE STRIP APPEARED")
                 // Scroll to current page when strip appears
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    print("📍 STRIP APPEARED - SCROLL TO CURRENT PAGE: \(currentPage)")
                     proxy.scrollTo(currentPage, anchor: UnitPoint.center)
                 }
             }
@@ -111,13 +107,11 @@ struct PageStripView: View {
     private func detectCenterPage(scrollOffset: CGFloat) {
         // Don't detect page changes when strip is not expanded
         guard isExpanded else {
-            print("🚫 DETECT CENTER SKIPPED: strip not expanded")
             return
         }
 
         // Don't detect on initial appearance - only after user has actually scrolled
         guard hasUserScrolled else {
-            print("🚫 DETECT CENTER SKIPPED: user hasn't scrolled yet")
             return
         }
 
@@ -131,10 +125,8 @@ struct PageStripView: View {
         let centerPageFloat = (scrolledDistance + screenWidth/2) / itemWidth
         let centerPage = max(1, min(totalPages, Int(round(centerPageFloat))))
 
-        print("🎯 DETECT CENTER: offset=\(scrollOffset), calculated=\(centerPage), current=\(currentPage)")
 
         if centerPage != currentPage && !isScrolling {
-            print("✅ CENTER PAGE CHANGE: \(currentPage) -> \(centerPage)")
             UISelectionFeedbackGenerator().selectionChanged()
             onPageChange(centerPage)
         }
@@ -146,7 +138,6 @@ struct PageStripView: View {
 
         return Button(action: {
             if pageNumber != currentPage {
-                print("🔄 Tapped page: \(pageNumber)")
                 UISelectionFeedbackGenerator().selectionChanged()
                 onPageChange(pageNumber)
 
@@ -251,7 +242,6 @@ struct PageStripView: View {
     private func toggleExpansion() {
         haptics.impactOccurred()
 
-        print("🔄 TOGGLE EXPANSION: \(isExpanded) -> \(!isExpanded) | currentPage: \(currentPage)")
 
         withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
             isExpanded.toggle()

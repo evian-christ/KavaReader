@@ -209,6 +209,18 @@ struct ReaderView: View {
         .task {
             await viewModel.loadChapter()
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+            // 앱이 백그라운드로 갈 때 진행률 저장
+            Task {
+                await viewModel.saveProgressNow()
+            }
+        }
+        .onDisappear {
+            // 리더 화면을 떠날 때 진행률 저장
+            Task {
+                await viewModel.saveProgressNow()
+            }
+        }
     }
 
     private func handleTap() {

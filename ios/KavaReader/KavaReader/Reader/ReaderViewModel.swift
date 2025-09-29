@@ -25,12 +25,12 @@ final class ReaderViewModel: ObservableObject {
     init(series: LibrarySeries,
          chapter: SeriesChapter,
          service: LibraryServicing,
-         imageFetcher: PageImageFetching = URLSessionPageImageFetcher())
+         imageFetcher: PageImageFetching? = nil)
     {
         self.series = series
         self.chapter = chapter
         self.service = service
-        self.imageFetcher = imageFetcher
+        self.imageFetcher = imageFetcher ?? URLSessionPageImageFetcher()
         self.totalPages = chapter.pageCount
     }
 
@@ -40,6 +40,9 @@ final class ReaderViewModel: ObservableObject {
         didSet {
             guard preloadingEnabled else { return }
             preloadNearbyPages()
+
+            // 페이지 변경 시 진행률 저장 (디바운싱 적용)
+            scheduleProgressSave()
         }
     }
     @Published private(set) var totalPages: Int = 0
@@ -61,6 +64,9 @@ final class ReaderViewModel: ObservableObject {
         totalPages = chapter.pageCount
         isLoading = false
         errorMessage = nil
+
+        // 저장된 진행률 불러오기
+        await loadSavedProgress()
 
         // Start preloading nearby pages
         guard preloadingEnabled else { return }
@@ -265,4 +271,96 @@ final class ReaderViewModel: ObservableObject {
         errorMessage = nil
     }
 
+    // MARK: - Reading Progress
+
+    private var progressSaveTask: Task<Void, Never>?
+
+    /// 저장된 읽기 진행률을 불러와서 currentPage 설정
+    private func loadSavedProgress() async {
+
+        guard let kavitaService = service as? KavitaLibraryService,
+              let kavitaChapterId = chapter.kavitaChapterId else {
+            // 로컬 저장 진행률 확인 (Kavita API 사용 불가능한 경우)
+            if let localProgress = getLocalProgress() {
+                currentPage = localProgress
+            }
+            return
+        }
+
+        do {
+            if let progress = try await kavitaService.getProgress(chapterId: kavitaChapterId) {
+                let savedPage = max(1, min(totalPages, progress.pageNum))
+                currentPage = savedPage
+            } else {
+                if let localProgress = getLocalProgress() {
+                    currentPage = localProgress
+                }
+            }
+        } catch {
+            // Kavita에서 진행률을 가져올 수 없는 경우 로컬 저장소 확인
+            if let localProgress = getLocalProgress() {
+                currentPage = localProgress
+            }
+        }
+    }
+
+    /// 진행률 저장을 디바운싱하여 스케줄링
+    private func scheduleProgressSave() {
+        // 이전 태스크 취소
+        progressSaveTask?.cancel()
+
+        // 1초 후에 진행률 저장 (디바운싱)
+        progressSaveTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1초 대기
+            guard !Task.isCancelled else { return }
+            await saveCurrentProgress()
+        }
+    }
+
+    /// 현재 페이지를 Kavita 서버와 로컬에 저장
+    private func saveCurrentProgress() async {
+        guard let kavitaService = service as? KavitaLibraryService,
+              let kavitaSeriesId = series.kavitaSeriesId,
+              let kavitaVolumeId = chapter.kavitaVolumeId,
+              let kavitaChapterId = chapter.kavitaChapterId else {
+            // Kavita API 사용 불가능한 경우 로컬에만 저장
+            saveLocalProgress(page: currentPage)
+            return
+        }
+
+        do {
+            try await kavitaService.saveProgress(
+                seriesId: kavitaSeriesId,
+                volumeId: kavitaVolumeId,
+                chapterId: kavitaChapterId,
+                pageNumber: currentPage
+            )
+
+            // Kavita 저장 성공 시 로컬에도 백업 저장
+            saveLocalProgress(page: currentPage)
+
+        } catch {
+            // Kavita 저장 실패 시 로컬에만 저장
+            saveLocalProgress(page: currentPage)
+        }
+    }
+
+    /// 수동으로 진행률 저장 (예: 앱이 백그라운드로 갈 때)
+    func saveProgressNow() async {
+        progressSaveTask?.cancel()
+        await saveCurrentProgress()
+    }
+
+    // MARK: - Local Progress Storage (Fallback)
+
+    private func getLocalProgress() -> Int? {
+        let key = "chapter_progress_\(chapter.id.uuidString)"
+        let savedPage = UserDefaults.standard.integer(forKey: key)
+        return savedPage > 0 ? savedPage : nil
+    }
+
+    private func saveLocalProgress(page: Int) {
+        let key = "chapter_progress_\(chapter.id.uuidString)"
+        UserDefaults.standard.set(page, forKey: key)
+    }
 }
