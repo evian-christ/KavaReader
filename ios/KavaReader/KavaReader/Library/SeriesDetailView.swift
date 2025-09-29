@@ -9,6 +9,11 @@ struct SeriesDetailView: View {
 
     @StateObject private var viewModel: SeriesDetailViewModel
     @State private var lastServiceKey: String = ""
+    @State private var selectedChapter: SeriesChapter?
+    @State private var showReader = false
+    @State private var isNavigatingToReader = false
+    @State private var hasContinuePoint = false
+    @State private var isCheckingContinuePoint = false
 
     private let chapterGrid = [
         GridItem(.adaptive(minimum: 100), spacing: 12)
@@ -59,6 +64,13 @@ struct SeriesDetailView: View {
         .onChange(of: apiKey) {
             Task { await loadSeries(force: true) }
         }
+        .navigationDestination(isPresented: $isNavigatingToReader) {
+            if let selectedChapter = selectedChapter {
+                ReaderView(series: series,
+                          chapter: selectedChapter,
+                          serviceFactory: currentFactory)
+            }
+        }
     }
 
     private var heroSection: some View {
@@ -91,17 +103,21 @@ struct SeriesDetailView: View {
             }
 
             // Read button
-            NavigationLink {
-                if let detail = viewModel.detail, let firstChapter = detail.chapters.first {
-                    ReaderView(series: series,
-                              chapter: firstChapter,
-                              serviceFactory: currentFactory)
+            Button {
+                Task {
+                    await startReading()
                 }
             } label: {
                 HStack {
-                    Image(systemName: "play.fill")
-                    Text("읽기 시작")
-                        .font(.headline)
+                    if isCheckingContinuePoint {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                            .foregroundStyle(.white)
+                    } else {
+                        Image(systemName: hasContinuePoint ? "play.circle.fill" : "play.fill")
+                        Text(hasContinuePoint ? "계속 읽기" : "읽기 시작")
+                            .font(.headline)
+                    }
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, 32)
@@ -111,7 +127,7 @@ struct SeriesDetailView: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 25))
             }
-            .disabled(viewModel.detail?.chapters.isEmpty ?? true)
+            .disabled(viewModel.detail?.chapters.isEmpty ?? true || isCheckingContinuePoint)
         }
         .padding(.horizontal, 24)
         .padding(.top, 20)
@@ -162,6 +178,7 @@ struct SeriesDetailView: View {
         updateService(force: force)
         if let kavitaSeriesId = series.kavitaSeriesId {
             await viewModel.load(kavitaSeriesId: kavitaSeriesId, force: force)
+            await checkContinuePoint()
         } else {
             viewModel.setError("시리즈 ID를 찾을 수 없습니다")
         }
@@ -172,6 +189,70 @@ struct SeriesDetailView: View {
         if force || key != lastServiceKey {
             viewModel.updateService(currentFactory.makeService())
             lastServiceKey = key
+        }
+    }
+
+    private func checkContinuePoint() async {
+        guard let kavitaSeriesId = series.kavitaSeriesId else {
+            hasContinuePoint = false
+            return
+        }
+
+        isCheckingContinuePoint = true
+
+        if let kavitaService = currentFactory.makeService() as? KavitaLibraryService {
+            do {
+                if let continuePoint = try await kavitaService.getContinuePoint(seriesId: kavitaSeriesId) {
+                    // pagesRead가 0보다 큰 경우에만 "계속 읽기"로 표시
+                    hasContinuePoint = continuePoint.pagesRead > 0
+                } else {
+                    hasContinuePoint = false
+                }
+            } catch {
+                hasContinuePoint = false
+            }
+        } else {
+            hasContinuePoint = false
+        }
+
+        isCheckingContinuePoint = false
+    }
+
+    private func startReading() async {
+
+        guard let kavitaSeriesId = series.kavitaSeriesId else {
+            // Kavita ID가 없으면 첫 번째 챕터로
+            if let firstChapter = viewModel.detail?.chapters.first {
+                selectedChapter = firstChapter
+                isNavigatingToReader = true
+            } else {
+            }
+            return
+        }
+
+
+        // Continue Point API로 마지막 읽은 위치 확인
+        if let kavitaService = currentFactory.makeService() as? KavitaLibraryService {
+            do {
+                if let continuePoint = try await kavitaService.getContinuePoint(seriesId: kavitaSeriesId) {
+
+                    // 해당 챕터를 찾아서 이동
+                    if let targetChapter = viewModel.detail?.chapters.first(where: { $0.kavitaChapterId == continuePoint.chapterId }) {
+                        selectedChapter = targetChapter
+                        isNavigatingToReader = true
+                        return
+                    } else {
+                    }
+                }
+            } catch {
+            }
+        }
+
+        // Continue Point를 찾지 못했거나 에러가 발생한 경우 첫 번째 챕터로
+        if let firstChapter = viewModel.detail?.chapters.first {
+            selectedChapter = firstChapter
+            isNavigatingToReader = true
+        } else {
         }
     }
 }

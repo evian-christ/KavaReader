@@ -55,7 +55,6 @@ struct ContentView: View {
                                let kavita = svcChild.value as? KavitaLibraryService {
                                 let _ = await kavita.probeSectionsVariants()
                             } else {
-                                print("Unable to access viewModel.service via reflection. To run the probe, temporarily cast your service when creating the view model in DEBUG mode.")
                             }
                         }
                     }
@@ -87,6 +86,12 @@ struct ContentView: View {
     private var libraryList: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 32) {
+                // 이어서 읽기 섹션
+                if !viewModel.continueReadingItems.isEmpty {
+                    continueReadingSection
+                }
+
+                // 기존 라이브러리 섹션들
                 ForEach(filteredSections) { section in
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {
@@ -120,6 +125,36 @@ struct ContentView: View {
             .padding(.top, 32)
         }
         .background(Color(.systemBackground))
+    }
+
+    private var continueReadingSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("이어서 읽기")
+                    .font(.title2.weight(.semibold))
+                Spacer()
+            }
+            .padding(.horizontal, 28)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    ForEach(viewModel.continueReadingItems) { item in
+                        NavigationLink(destination: ReaderView(
+                            series: item.series,
+                            chapter: item.lastReadChapter,
+                            serviceFactory: LibraryServiceFactory(
+                                baseURLString: serverBaseURL,
+                                apiKey: apiKey.isEmpty ? nil : apiKey
+                            )
+                        )) {
+                            ContinueReadingItemView(item: item)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 28)
+            }
+        }
     }
 
     private func refreshLibrary(force: Bool = false) async {
@@ -200,6 +235,62 @@ private struct MoreButtonView: View {
                 }
         }
         .frame(width: 130)
+    }
+}
+
+private struct ContinueReadingItemView: View {
+    let item: ContinueReadingItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ZStack(alignment: .bottomLeading) {
+                // 배경 커버 이미지
+                if let url = item.series.coverURL {
+                    CoverImageView(url: url, height: 180, cornerRadius: 12, gradientColors: gradientColors)
+                } else {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(LinearGradient(colors: gradientColors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(height: 180)
+                }
+
+                // 진행률 오버레이
+                VStack(alignment: .leading, spacing: 4) {
+                    Spacer()
+
+                    // 진행률 바
+                    ProgressView(value: item.progressPercentage)
+                        .progressViewStyle(LinearProgressViewStyle(tint: .white))
+                        .scaleEffect(x: 1, y: 0.8, anchor: .center)
+
+                    // 진행률 텍스트
+                    Text(item.progressText)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
+                }
+                .padding(12)
+            }
+
+            // 제목 정보
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.series.title)
+                    .font(.caption.weight(.medium))
+                    .lineLimit(1)
+                    .foregroundStyle(.primary)
+
+                Text(item.lastReadChapter.title)
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 130)
+    }
+
+    @MainActor
+    private var gradientColors: [Color] {
+        let colors = item.series.coverColorHexes.compactMap(Color.init(hex:))
+        return colors.isEmpty ? [.purple, .blue] : colors
     }
 }
 
