@@ -79,7 +79,6 @@ struct SettingsView: View {
             let basePath = comps.path
             comps.path = basePath + path
             guard let url = comps.url else { continue }
-            print("[Settings] performLogin -> attempting login to \(url)")
 
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
@@ -115,13 +114,7 @@ struct SettingsView: View {
 
             do {
                 let (data, response) = try await URLSession.shared.data(for: request)
-                print("[Settings] Received response for \(path): \(String(describing: (response as? HTTPURLResponse)?.statusCode))")
                 if let http = response as? HTTPURLResponse {
-                    print("[Settings] Response headers: \(http.allHeaderFields)")
-
-                    // preview body for diagnostics
-                    let preview = previewBody(data: data, maxLength: 2048)
-                    print("[Settings] Response body preview (first 2048 bytes):\n\(preview)")
 
                     // detect token from common auth headers (e.g., Authorization: Bearer ... in response)
                     if let authHeader = (http.allHeaderFields["Authorization"] as? String) ?? (http.allHeaderFields["authorization"] as? String) {
@@ -139,7 +132,6 @@ struct SettingsView: View {
                             let cookies = HTTPCookie.cookies(withResponseHeaderFields: headerFields, for: url)
                             for c in cookies {
                                 HTTPCookieStorage.shared.setCookie(c)
-                                print("[Settings] Stored cookie: \(c.name)=\(c.value) for domain=\(c.domain)")
                                 // Some deployments put api key or jwt-like token into cookie (e.g., auth_token, api_key)
                                 let nameLower = c.name.lowercased()
                                 if nameLower.contains("token") || nameLower.contains("jwt") || nameLower == "api_key" || nameLower == "apikey" || nameLower == "x-api-key" {
@@ -184,7 +176,7 @@ struct SettingsView: View {
                         lastError = "\(path) responded 2xx but no token/cookie detected."
                         continue
                     } else {
-                        lastError = "\(path) returned status \(http.statusCode) - preview: \(preview)"
+                        lastError = "\(path) returned status \(http.statusCode)"
                         continue
                     }
                 }
@@ -228,7 +220,6 @@ struct SettingsView: View {
             }
             guard let html = String(data: htmlData, encoding: .utf8) else { return false }
             guard let (param, token) = extractCSRFToken(from: html) else {
-                print("[Settings] CSRF token not found in /login HTML")
                 return false
             }
 
@@ -275,7 +266,6 @@ struct SettingsView: View {
                 }
             }
         } catch {
-            print("[Settings] CSRF flow error: \(error.localizedDescription)")
             return false
         }
         return false
