@@ -239,3 +239,80 @@ extension SeriesChapterDTO {
                       lastReadPage: lastReadPage)
     }
 }
+
+// MARK: - Reading Progress Models
+
+struct ProgressDto: Codable, Hashable {
+    let volumeId: Int
+    let chapterId: Int
+    let pageNum: Int
+    let seriesId: Int
+    let libraryId: Int
+    let bookScrollId: String?
+    let lastModifiedUtc: String
+}
+
+struct ProgressUpdateRequest: Codable {
+    let volumeId: Int
+    let chapterId: Int
+    let pageNum: Int
+    let seriesId: Int
+    let libraryId: Int
+    let bookScrollId: String?
+}
+
+struct ContinuePointDto: Codable {
+    let id: Int
+    let volumeId: Int
+    let pagesRead: Int
+    let title: String
+    let pages: Int
+
+    // 편의 속성들
+    var chapterId: Int { return id }
+    var pageNum: Int { return pagesRead }
+}
+
+struct ReadingProgressResponse: Codable {
+    let progress: ProgressDto?
+    let success: Bool
+    let message: String?
+}
+
+// MARK: - Continue Reading Models
+
+struct ContinueReadingItem: Identifiable, Hashable {
+    let id = UUID()
+    let series: LibrarySeries
+    let lastReadChapter: SeriesChapter
+    let progress: ProgressDto
+
+    var progressPercentage: Double {
+        guard lastReadChapter.pageCount > 0 else { return 0 }
+        return Double(progress.pageNum) / Double(lastReadChapter.pageCount)
+    }
+
+    var progressText: String {
+        return "\(progress.pageNum) / \(lastReadChapter.pageCount) 페이지"
+    }
+
+    // MARK: - Hashable Conformance
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(series)
+        hasher.combine(lastReadChapter)
+        hasher.combine(progress.seriesId)
+        hasher.combine(progress.chapterId)
+        hasher.combine(progress.pageNum)
+    }
+
+    static func == (lhs: ContinueReadingItem, rhs: ContinueReadingItem) -> Bool {
+        lhs.id == rhs.id &&
+        lhs.series == rhs.series &&
+        lhs.lastReadChapter == rhs.lastReadChapter &&
+        lhs.progress.seriesId == rhs.progress.seriesId &&
+        lhs.progress.chapterId == rhs.progress.chapterId &&
+        lhs.progress.pageNum == rhs.progress.pageNum
+    }
+}

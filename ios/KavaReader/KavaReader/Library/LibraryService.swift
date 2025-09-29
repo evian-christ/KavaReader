@@ -6,6 +6,7 @@ protocol LibraryServicing {
     func fetchSeriesDetail(kavitaSeriesId: Int) async throws -> SeriesDetail
     func pageImageURL(seriesID: UUID, chapterID: UUID, pageNumber: Int) throws -> URL
     func fetchPageImage(seriesID: UUID, chapterID: UUID, pageNumber: Int) async throws -> Data
+    func fetchContinueReadingItems() async -> [ContinueReadingItem]
 }
 
 enum LibraryServiceError: Error, LocalizedError, Equatable {
