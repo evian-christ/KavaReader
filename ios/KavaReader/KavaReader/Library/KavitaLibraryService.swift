@@ -523,55 +523,7 @@ struct KavitaLibraryService: LibraryServicing {
         return request
     }
 
-    // Diagnostic probe: try a set of header permutations and record responses so we can see which
-    // request shape the reverse proxy accepts as an API call (returns JSON) instead of the SPA HTML.
-    // Returns an array of ProbeResult (one per permutation) with status code and a short body preview.
-    #if DEBUG
-    func probeSectionsVariants() async -> [ProbeResult] {
-        // Simple probe - only test Bearer JWT since we know that's what works
-        let request = try? await makeRequest(path: sectionsPath)
 
-        guard let request = request else {
-            return [ProbeResult(headers: "invalid URL", statusCode: nil, bodyPreview: "Could not create request")]
-        }
-
-        do {
-            let (data, response) = try await session.data(for: request)
-            let status = (response as? HTTPURLResponse)?.statusCode
-            let preview = Self.previewBody(data: data, maxLength: 200)
-            let authHeader = request.allHTTPHeaderFields?["Authorization"] ?? "none"
-
-            let summary = "Probe result: [status: \(status?.description ?? "nil")] headers=Authorization: \(authHeader) body=\(preview)"
-
-            return [ProbeResult(headers: "Authorization: \(authHeader)", statusCode: status, bodyPreview: preview)]
-        } catch {
-            return [ProbeResult(headers: "Bearer JWT", statusCode: nil, bodyPreview: "error: \(error.localizedDescription)")]
-        }
-    }
-    #endif
-
-    #if DEBUG
-    struct ProbeResult {
-        let headers: String
-        let statusCode: Int?
-        let bodyPreview: String
-    }
-
-    static func previewBody(data: Data, maxLength: Int = 512) -> String {
-        if data.isEmpty { return "<empty>" }
-        if let s = String(data: data, encoding: .utf8) {
-            // detect if it's HTML (starts with <!doctype or <html)
-            let lowered = s.lowercased()
-            if lowered.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<!doctype") || lowered.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<html") {
-                return String(s.prefix(maxLength)).replacingOccurrences(of: "\n", with: " ")
-            }
-            // not HTML, return JSON-ish preview
-            return String(s.prefix(maxLength)).replacingOccurrences(of: "\n", with: " ")
-        }
-        return "<non-utf8, \(data.count) bytes>"
-    }
-
-    #endif
 
     private func buildURL(path: String, queryItems: [URLQueryItem]? = nil) -> URL? {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {

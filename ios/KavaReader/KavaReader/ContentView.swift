@@ -41,26 +41,6 @@ struct ContentView: View {
             .navigationDestination(for: SectionNavigation.self) { sectionNav in
                 SectionDetailView(sectionTitle: sectionNav.title)
             }
-            #if DEBUG
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Probe") {
-                        Task {
-                            // Attempt to downcast the current service to KavitaLibraryService to run the probe.
-                            // LibraryViewModel keeps the service privately; use a reflection-friendly approach
-                            // by trying to access via Mirror (since property is private). This is only for
-                            // debug convenience; if that fails, instruct developer how to call probe directly.
-                            let mirror = Mirror(reflecting: viewModel)
-                            if let svcChild = mirror.children.first(where: { $0.label == "service" }),
-                               let kavita = svcChild.value as? KavitaLibraryService {
-                                let _ = await kavita.probeSectionsVariants()
-                            } else {
-                            }
-                        }
-                    }
-                }
-            }
-            #endif
         }
         .onChange(of: serverBaseURL) {
             Task { await refreshLibrary(force: true) }
