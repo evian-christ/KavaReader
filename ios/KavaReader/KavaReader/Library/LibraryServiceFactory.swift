@@ -60,6 +60,10 @@ private struct InvalidBaseURLLibraryService: LibraryServicing {
     func fetchPageImage(seriesID: UUID, chapterID: UUID, pageNumber: Int) async throws -> Data {
         throw LibraryServiceError.invalidBaseURL
     }
+
+    func fetchContinueReadingItems() async -> [ContinueReadingItem] {
+        return []
+    }
 }
 
 private struct UnsupportedSchemeLibraryService: LibraryServicing {
@@ -83,5 +87,9 @@ private struct UnsupportedSchemeLibraryService: LibraryServicing {
 
     func fetchPageImage(seriesID: UUID, chapterID: UUID, pageNumber: Int) async throws -> Data {
         throw LibraryServiceError.unsupportedScheme(scheme)
+    }
+
+    func fetchContinueReadingItems() async -> [ContinueReadingItem] {
+        return []
     }
 }

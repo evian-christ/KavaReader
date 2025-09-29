@@ -12,6 +12,7 @@ final class LibraryViewModel: ObservableObject {
     // MARK: Internal
 
     @Published private(set) var sections: [LibrarySection] = []
+    @Published private(set) var continueReadingItems: [ContinueReadingItem] = []
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
 
@@ -31,15 +32,21 @@ final class LibraryViewModel: ObservableObject {
         errorMessage = nil
 
         do {
-            let loaded = try await service.fetchSections()
+            // 섹션과 이어서 읽기 데이터를 병렬로 로드
+            async let sectionsTask = service.fetchSections()
+            async let continueReadingTask = service.fetchContinueReadingItems()
+
+            let loaded = try await sectionsTask
+            let continueItems = await continueReadingTask
+
             sections = loaded
+            continueReadingItems = continueItems
             cachedSections = loaded // Cache the results
-            #if DEBUG
-            print("📦 Library data cached: \(loaded.count) sections")
-            #endif
+
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             sections = []
+            continueReadingItems = []
             cachedSections = nil
         }
 
@@ -61,9 +68,6 @@ final class LibraryViewModel: ObservableObject {
         service = newService
         // Clear cache when service changes (e.g., different server/API key)
         cachedSections = nil
-        #if DEBUG
-        print("🔄 Service updated, cache cleared")
-        #endif
     }
 
     // MARK: Private
