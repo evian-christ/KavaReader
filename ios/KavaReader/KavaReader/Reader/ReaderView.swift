@@ -1,5 +1,20 @@
 import SwiftUI
 
+// MARK: - Page Visibility Tracking
+
+struct PageVisibility: Equatable {
+    let pageNumber: Int
+    let frame: CGRect
+}
+
+struct PageVisibilityPreferenceKey: PreferenceKey {
+    static var defaultValue: [PageVisibility] = []
+
+    static func reduce(value: inout [PageVisibility], nextValue: () -> [PageVisibility]) {
+        value.append(contentsOf: nextValue())
+    }
+}
+
 struct ReaderView: View {
     // MARK: Lifecycle
 
@@ -48,23 +63,63 @@ struct ReaderView: View {
                         }
                         .tabViewStyle(.page(indexDisplayMode: .never))
                     } else {
-                        ScrollView(.vertical, showsIndicators: false) {
-                            LazyVStack(spacing: 0) {
-                                ForEach(1 ... viewModel.totalPages, id: \.self) { pageNumber in
-                                    ZoomableImageView(pageNumber: pageNumber,
-                                                      viewModel: viewModel,
-                                                      isActive: true,
-                                                      pageFitMode: readerSettings.pageFitMode,
-                                                      onTap: handleTap,
-                                                      onPageChange: { _ in },
-                                                      onInteractionChange: { _ in })
-                                        .background(FullScreenBackground())
+                        GeometryReader { geo in
+                            ScrollViewReader { scrollProxy in
+                                ScrollView(.vertical, showsIndicators: false) {
+                                    LazyVStack(spacing: 0) {
+                                        ForEach(1 ... viewModel.totalPages, id: \.self) { pageNumber in
+                                            ZoomableImageView(pageNumber: pageNumber,
+                                                              viewModel: viewModel,
+                                                              isActive: true,
+                                                              pageFitMode: readerSettings.pageFitMode,
+                                                              onTap: handleTap,
+                                                              onPageChange: { _ in },
+                                                              onInteractionChange: { _ in })
+                                                .frame(width: geo.size.width)
+                                                .background(
+                                                    GeometryReader { itemGeo in
+                                                        Color.clear
+                                                            .preference(
+                                                                key: PageVisibilityPreferenceKey.self,
+                                                                value: [
+                                                                    PageVisibility(
+                                                                        pageNumber: pageNumber,
+                                                                        frame: itemGeo.frame(in: .named("scroll"))
+                                                                    )
+                                                                ]
+                                                            )
+                                                    }
+                                                )
+                                                .background(FullScreenBackground())
+                                                .id(pageNumber)
+                                        }
+                                    }
+                                }
+                                .coordinateSpace(name: "scroll")
+                                .onPreferenceChange(PageVisibilityPreferenceKey.self) { pages in
+                                    updateCurrentPageFromScroll(pages: pages, scrollViewHeight: geo.size.height)
+                                }
+                                .onChange(of: scrollTarget) { _, newTarget in
+                                    if let target = newTarget {
+                                        scrollProxy.scrollTo(target, anchor: .top)
+                                        scrollTarget = nil
+                                    }
+                                }
+                                .onChange(of: viewModel.currentPage) { oldPage, newPage in
+                                    // 초기 로드 시에만 스크롤 (oldPage가 1이고 처음 변경될 때)
+                                    if !hasScrolledToInitialPage && newPage > 1 {
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                            scrollProxy.scrollTo(newPage, anchor: .top)
+                                            hasScrolledToInitialPage = true
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
                 }
-                .padding(.top, shouldRemoveTopInset ? -safeAreaInsets.top : 0)
+                .padding(.top, -safeAreaInsets.top)
+                .padding(.bottom, -safeAreaInsets.bottom)
                 .padding(.leading, -safeAreaInsets.leading)
                 .padding(.trailing, -safeAreaInsets.trailing)
                 .ignoresSafeArea(.all)
@@ -142,6 +197,9 @@ struct ReaderView: View {
                             PageStripView(currentPage: $viewModel.currentPage,
                                           totalPages: viewModel.totalPages,
                                           onPageChange: { newPage in
+                                              if readerSettings.scrollDirection == .vertical {
+                                                  scrollTarget = newPage
+                                              }
                                               Task {
                                                   await viewModel.goToPage(newPage)
                                               }
@@ -216,11 +274,38 @@ struct ReaderView: View {
     @StateObject private var readerSettings = ReaderSettings.shared
     @State private var showUI = true
     @State private var lastTapTime = Date()
+    @State private var scrollTarget: Int?
+    @State private var hasScrolledToInitialPage = false
     @Environment(\.dismiss) private var dismiss
 
     private func handleTap() {
         withAnimation(.easeInOut(duration: 0.3)) {
             showUI.toggle()
+        }
+    }
+
+    private func updateCurrentPageFromScroll(pages: [PageVisibility], scrollViewHeight: CGFloat) {
+        // 화면 중앙에 가장 가까운 페이지를 찾음
+        let scrollCenter = scrollViewHeight / 2
+
+        let visiblePage = pages
+            .filter { page in
+                // 화면에 보이는 페이지만 고려
+                let pageTop = page.frame.minY
+                let pageBottom = page.frame.maxY
+                return pageBottom > 0 && pageTop < scrollViewHeight
+            }
+            .min { page1, page2 in
+                // 화면 중앙에 더 가까운 페이지 선택
+                let distance1 = abs(page1.frame.midY - scrollCenter)
+                let distance2 = abs(page2.frame.midY - scrollCenter)
+                return distance1 < distance2
+            }
+
+        if let page = visiblePage, page.pageNumber != viewModel.currentPage {
+            Task {
+                await viewModel.updateCurrentPage(page.pageNumber)
+            }
         }
     }
 }

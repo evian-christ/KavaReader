@@ -95,6 +95,11 @@ final class ReaderViewModel: ObservableObject {
         currentPage = page
     }
 
+    func updateCurrentPage(_ page: Int) async {
+        guard page >= 1, page <= totalPages, page != currentPage else { return }
+        currentPage = page
+    }
+
     func getPreloadedImage(for pageNumber: Int) -> UIImage? {
         return preloadedImages[pageNumber]
     }
