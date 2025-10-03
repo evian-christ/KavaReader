@@ -1,16 +1,8 @@
-import SwiftUI
 import OSLog
+import SwiftUI
 
 struct CoverImageView: View {
-    let url: URL
-    let height: CGFloat
-    let cornerRadius: CGFloat
-    let gradientColors: [Color]
-
-    @AppStorage("server_base_url") private var serverBaseURL: String = ""
-    @AppStorage("server_api_key") private var serverAPIKey: String = ""
-
-    @State private var phase: Phase = .idle
+    // MARK: Internal
 
     enum Phase {
         case idle
@@ -18,6 +10,11 @@ struct CoverImageView: View {
         case success(Image)
         case failure
     }
+
+    let url: URL
+    let height: CGFloat
+    let cornerRadius: CGFloat
+    let gradientColors: [Color]
 
     var body: some View {
         ZStack {
@@ -44,13 +41,20 @@ struct CoverImageView: View {
         .task { await load() }
     }
 
+    // MARK: Private
+
+    @AppStorage("server_base_url") private var serverBaseURL: String = ""
+    @AppStorage("server_api_key") private var serverAPIKey: String = ""
+
+    @State private var phase: Phase = .idle
+
     private func load() async {
         // Use pattern matching to avoid ambiguity with SwiftUI's ScrollPhase.idle
         guard case .idle = phase else { return }
         phase = .loading
         do {
             let (data, response) = try await URLSession.shared.data(for: makeRequest())
-            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
                 phase = .failure; return
             }
             let contentType = http.value(forHTTPHeaderField: "Content-Type") ?? ""
@@ -84,7 +88,8 @@ struct CoverImageView: View {
         // Auth: prefer Bearer JWT from Keychain, else ApiKey
         if let tokenData = KeychainHelper.shared.read(key: "kavita_api_token"),
            let token = String(data: tokenData, encoding: .utf8), !token.isEmpty,
-           token.split(separator: ".").count == 3 {
+           token.split(separator: ".").count == 3
+        {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         } else if !serverAPIKey.isEmpty {
             request.setValue(serverAPIKey, forHTTPHeaderField: "ApiKey")

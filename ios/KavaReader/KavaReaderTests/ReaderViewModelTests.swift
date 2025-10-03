@@ -1,8 +1,8 @@
-import XCTest
-@testable import KavaReader
 import Foundation
+@testable import KavaReader
+import XCTest
 
-private let stubPNGData: Data = Data([
+private let stubPNGData: Data = .init([
     0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
     0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
     0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
@@ -11,12 +11,11 @@ private let stubPNGData: Data = Data([
     0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
     0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
     0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-    0x42, 0x60, 0x82
+    0x42, 0x60, 0x82,
 ])
 
 @MainActor
 final class ReaderViewModelTests: XCTestCase {
-
     var mockService: MockLibraryService!
     var mockImageFetcher: MockPageImageFetcher!
     var series: LibrarySeries!
@@ -27,25 +26,19 @@ final class ReaderViewModelTests: XCTestCase {
         super.setUp()
         mockService = MockLibraryService()
         mockImageFetcher = MockPageImageFetcher()
-        series = LibrarySeries(
-            kavitaSeriesId: 1,
-            title: "Test Series",
-            author: "Test Author",
-            coverColorHexes: ["#FF0000", "#00FF00"]
-        )
-        chapter = SeriesChapter(
-            id: UUID(),
-            title: "Test Chapter",
-            number: 1.0,
-            pageCount: 10,
-            kavitaChapterId: 1
-        )
-        viewModel = ReaderViewModel(
-            series: series,
-            chapter: chapter,
-            service: mockService,
-            imageFetcher: mockImageFetcher
-        )
+        series = LibrarySeries(kavitaSeriesId: 1,
+                               title: "Test Series",
+                               author: "Test Author",
+                               coverColorHexes: ["#FF0000", "#00FF00"])
+        chapter = SeriesChapter(id: UUID(),
+                                title: "Test Chapter",
+                                number: 1.0,
+                                pageCount: 10,
+                                kavitaChapterId: 1)
+        viewModel = ReaderViewModel(series: series,
+                                    chapter: chapter,
+                                    service: mockService,
+                                    imageFetcher: mockImageFetcher)
         viewModel.configurePreloading(enabled: false)
     }
 
@@ -170,29 +163,27 @@ class MockLibraryService: LibraryServicing {
         return []
     }
 
-    func fetchFullSection(sectionTitle: String) async throws -> [LibrarySeries] {
+    func fetchFullSection(sectionTitle _: String) async throws -> [LibrarySeries] {
         return []
     }
 
-    func fetchSeriesDetail(kavitaSeriesId: Int) async throws -> SeriesDetail {
-        return SeriesDetail(
-            id: UUID(),
-            title: "Mock Series",
-            author: "Mock Author",
-            summary: "Mock Summary",
-            coverImageURL: nil,
-            chapters: []
-        )
+    func fetchSeriesDetail(kavitaSeriesId _: Int) async throws -> SeriesDetail {
+        return SeriesDetail(id: UUID(),
+                            title: "Mock Series",
+                            author: "Mock Author",
+                            summary: "Mock Summary",
+                            coverImageURL: nil,
+                            chapters: [])
     }
 
-    func pageImageURL(seriesID: UUID, chapterID: UUID, pageNumber: Int) throws -> URL {
+    func pageImageURL(seriesID _: UUID, chapterID _: UUID, pageNumber: Int) throws -> URL {
         if let pageImageURLError {
             throw pageImageURLError
         }
         return URL(string: "https://example.com/api/image?chapterId=1&page=\(pageNumber)")!
     }
 
-    func fetchPageImage(seriesID: UUID, chapterID: UUID, pageNumber: Int) async throws -> Data {
+    func fetchPageImage(seriesID _: UUID, chapterID _: UUID, pageNumber _: Int) async throws -> Data {
         if shouldFailImageLoad {
             throw LibraryServiceError.imageLoadFailed(url: URL(string: "https://example.com/image.jpg")!)
         }
@@ -214,12 +205,12 @@ final class MockPageImageFetcher: PageImageFetching {
             throw error
         }
 
-        let response = HTTPURLResponse(
-            url: url,
-            statusCode: statusCode,
-            httpVersion: nil,
-            headerFields: nil
-        ) ?? URLResponse(url: url, mimeType: nil, expectedContentLength: 0, textEncodingName: nil)
+        let response = HTTPURLResponse(url: url,
+                                       statusCode: statusCode,
+                                       httpVersion: nil,
+                                       headerFields: nil) ?? URLResponse(url: url, mimeType: nil,
+                                                                         expectedContentLength: 0,
+                                                                         textEncodingName: nil)
 
         return (data, response)
     }

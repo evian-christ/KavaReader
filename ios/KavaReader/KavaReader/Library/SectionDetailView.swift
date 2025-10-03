@@ -1,16 +1,10 @@
-import SwiftUI
 import Combine
+import SwiftUI
 
 struct SectionDetailView: View {
+    // MARK: Internal
+
     let sectionTitle: String
-
-    @AppStorage("server_base_url") private var serverBaseURL: String = ""
-    @AppStorage("server_api_key") private var apiKey: String = ""
-
-    @StateObject private var viewModel = SectionDetailViewModel()
-    @State private var lastServiceKey: String = ""
-
-    private let grid = [GridItem(.adaptive(minimum: 140), spacing: 24)]
 
     var body: some View {
         Group {
@@ -40,6 +34,20 @@ struct SectionDetailView: View {
         }
     }
 
+    // MARK: Private
+
+    @AppStorage("server_base_url") private var serverBaseURL: String = ""
+    @AppStorage("server_api_key") private var apiKey: String = ""
+
+    @StateObject private var viewModel = SectionDetailViewModel()
+    @State private var lastServiceKey: String = ""
+
+    private let grid = [GridItem(.adaptive(minimum: 140), spacing: 24)]
+
+    private var currentFactory: LibraryServiceFactory {
+        LibraryServiceFactory(baseURLString: serverBaseURL, apiKey: apiKey.isEmpty ? nil : apiKey)
+    }
+
     private var sectionContent: some View {
         ScrollView {
             LazyVGrid(columns: grid, spacing: 24) {
@@ -54,10 +62,6 @@ struct SectionDetailView: View {
             .padding(.top, 32)
         }
         .background(Color(.systemBackground))
-    }
-
-    private var currentFactory: LibraryServiceFactory {
-        LibraryServiceFactory(baseURLString: serverBaseURL, apiKey: apiKey.isEmpty ? nil : apiKey)
     }
 
     private func loadSection(force: Bool = false) async {
@@ -75,13 +79,9 @@ struct SectionDetailView: View {
 }
 
 private struct LibraryCoverView: View {
-    let series: LibrarySeries
+    // MARK: Internal
 
-    @MainActor
-    private var gradientColors: [Color] {
-        let colors = series.coverColorHexes.compactMap(Color.init(hex:))
-        return colors.isEmpty ? [.purple, .blue] : colors
-    }
+    let series: LibrarySeries
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -90,7 +90,8 @@ private struct LibraryCoverView: View {
                     CoverImageView(url: url, height: 200, cornerRadius: 16, gradientColors: gradientColors)
                 } else {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(LinearGradient(colors: gradientColors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .fill(LinearGradient(colors: gradientColors, startPoint: .topLeading,
+                                             endPoint: .bottomTrailing))
                         .frame(height: 200)
                 }
                 VStack(alignment: .leading, spacing: 4) {
@@ -105,6 +106,14 @@ private struct LibraryCoverView: View {
                 .padding(16)
             }
         }
+    }
+
+    // MARK: Private
+
+    @MainActor
+    private var gradientColors: [Color] {
+        let colors = series.coverColorHexes.compactMap(Color.init(hex:))
+        return colors.isEmpty ? [.purple, .blue] : colors
     }
 }
 
@@ -144,11 +153,11 @@ private struct SectionEmptyView: View {
 
 @MainActor
 final class SectionDetailViewModel: ObservableObject {
+    // MARK: Internal
+
     @Published var series: [LibrarySeries] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
-
-    private var service: LibraryServicing?
 
     func updateService(_ service: LibraryServicing) {
         self.service = service
@@ -160,7 +169,7 @@ final class SectionDetailViewModel: ObservableObject {
             return
         }
 
-        if !force && !series.isEmpty {
+        if !force, !series.isEmpty {
             return
         }
 
@@ -176,6 +185,10 @@ final class SectionDetailViewModel: ObservableObject {
 
         isLoading = false
     }
+
+    // MARK: Private
+
+    private var service: LibraryServicing?
 }
 
 #Preview {

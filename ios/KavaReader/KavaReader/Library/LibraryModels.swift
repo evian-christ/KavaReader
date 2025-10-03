@@ -12,21 +12,21 @@ struct SeriesInfo: Identifiable, Hashable, Decodable {
 
 extension SeriesInfo {
     func toLibrarySeries() -> LibrarySeries {
-        return LibrarySeries(
-            id: self.id,
-            kavitaSeriesId: self.kavitaSeriesId,
-            title: self.title,
-            author: self.author,
-            coverColorHexes: self.coverColorHexes,
-            coverURL: self.coverURL
-        )
+        return LibrarySeries(id: id,
+                             kavitaSeriesId: kavitaSeriesId,
+                             title: title,
+                             author: author,
+                             coverColorHexes: coverColorHexes,
+                             coverURL: coverURL)
     }
 }
 
 struct LibrarySeries: Identifiable, Hashable {
     // MARK: Lifecycle
 
-    init(id: UUID = UUID(), kavitaSeriesId: Int? = nil, title: String, author: String, coverColorHexes: [String], coverURL: URL? = nil) {
+    init(id: UUID = UUID(), kavitaSeriesId: Int? = nil, title: String, author: String, coverColorHexes: [String],
+         coverURL: URL? = nil)
+    {
         self.id = id
         self.kavitaSeriesId = kavitaSeriesId
         self.title = title
@@ -46,46 +46,50 @@ struct LibrarySeries: Identifiable, Hashable {
 }
 
 struct LibrarySection: Identifiable, Hashable, Decodable {
-    let id: UUID
-    let title: String
-    let items: [SeriesInfo]
-    
-    var series: [LibrarySeries] {
-        return items.map { $0.toLibrarySeries() }
-    }
-    
-    enum CodingKeys: String, CodingKey {
-        case id
-        case title
-        case items
-    }
-    
-    // Hashable 프로토콜 준수를 위한 구현
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-        hasher.combine(title)
-        hasher.combine(items)
-    }
-    
-    // Equatable 프로토콜 준수를 위한 구현
-    static func == (lhs: LibrarySection, rhs: LibrarySection) -> Bool {
-        lhs.id == rhs.id &&
-        lhs.title == rhs.title &&
-        lhs.items == rhs.items
-    }
-    
+    // MARK: Lifecycle
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
         title = try container.decode(String.self, forKey: .title)
-    items = try container.decode([SeriesInfo].self, forKey: .items)
+        items = try container.decode([SeriesInfo].self, forKey: .items)
     }
-    
+
     // 기본 생성자 추가
     init(id: UUID, title: String, items: [SeriesInfo]) {
         self.id = id
         self.title = title
         self.items = items
+    }
+
+    // MARK: Internal
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case items
+    }
+
+    let id: UUID
+    let title: String
+    let items: [SeriesInfo]
+
+    var series: [LibrarySeries] {
+        return items.map { $0.toLibrarySeries() }
+    }
+
+    // Equatable 프로토콜 준수를 위한 구현
+    static func == (lhs: LibrarySection, rhs: LibrarySection) -> Bool {
+        lhs.id == rhs.id &&
+            lhs.title == rhs.title &&
+            lhs.items == rhs.items
+    }
+
+    // Hashable 프로토콜 준수를 위한 구현
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(title)
+        hasher.combine(items)
     }
 }
 
@@ -195,27 +199,24 @@ extension LibrarySectionDTO {
     func toDomain() -> LibrarySection {
         // items를 SeriesInfo 배열로 변환
         let seriesInfoItems = items.map { dto -> SeriesInfo in
-            SeriesInfo(
-                id: dto.id ?? UUID(),
-                kavitaSeriesId: dto.kavitaSeriesId,
-                title: dto.title,
-                author: dto.author,
-                coverColorHexes: dto.coverColorHexes,
-                coverURL: dto.coverURL
-            )
+            SeriesInfo(id: dto.id ?? UUID(),
+                       kavitaSeriesId: dto.kavitaSeriesId,
+                       title: dto.title,
+                       author: dto.author,
+                       coverColorHexes: dto.coverColorHexes,
+                       coverURL: dto.coverURL)
         }
-        
-        return LibrarySection(
-            id: id ?? UUID(),
-            title: title,
-            items: seriesInfoItems
-        )
+
+        return LibrarySection(id: id ?? UUID(),
+                              title: title,
+                              items: seriesInfoItems)
     }
 }
 
 extension LibrarySeriesDTO {
     func toDomain() -> LibrarySeries {
-        LibrarySeries(id: id ?? UUID(), kavitaSeriesId: kavitaSeriesId, title: title, author: author, coverColorHexes: coverColorHexes, coverURL: coverURL)
+        LibrarySeries(id: id ?? UUID(), kavitaSeriesId: kavitaSeriesId, title: title, author: author,
+                      coverColorHexes: coverColorHexes, coverURL: coverURL)
     }
 }
 
@@ -296,6 +297,15 @@ struct ContinueReadingItem: Identifiable, Hashable {
         return "\(progress.pageNum) / \(lastReadChapter.pageCount) 페이지"
     }
 
+    static func == (lhs: ContinueReadingItem, rhs: ContinueReadingItem) -> Bool {
+        lhs.id == rhs.id &&
+            lhs.series == rhs.series &&
+            lhs.lastReadChapter == rhs.lastReadChapter &&
+            lhs.progress.seriesId == rhs.progress.seriesId &&
+            lhs.progress.chapterId == rhs.progress.chapterId &&
+            lhs.progress.pageNum == rhs.progress.pageNum
+    }
+
     // MARK: - Hashable Conformance
 
     func hash(into hasher: inout Hasher) {
@@ -305,14 +315,5 @@ struct ContinueReadingItem: Identifiable, Hashable {
         hasher.combine(progress.seriesId)
         hasher.combine(progress.chapterId)
         hasher.combine(progress.pageNum)
-    }
-
-    static func == (lhs: ContinueReadingItem, rhs: ContinueReadingItem) -> Bool {
-        lhs.id == rhs.id &&
-        lhs.series == rhs.series &&
-        lhs.lastReadChapter == rhs.lastReadChapter &&
-        lhs.progress.seriesId == rhs.progress.seriesId &&
-        lhs.progress.chapterId == rhs.progress.chapterId &&
-        lhs.progress.pageNum == rhs.progress.pageNum
     }
 }

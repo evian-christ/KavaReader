@@ -38,10 +38,10 @@ struct ServerSettingsView: View {
         .navigationTitle("서버 설정")
         .navigationBarTitleDisplayMode(.inline)
         .alert(connectionTestMessage, isPresented: $showConnectionAlert) {
-            Button("확인", role: .cancel) { }
+            Button("확인", role: .cancel) {}
         }
         .alert(loginAlertMessage, isPresented: $showLoginAlert) {
-            Button("확인", role: .cancel) { }
+            Button("확인", role: .cancel) {}
         }
     }
 
@@ -66,8 +66,8 @@ struct ServerSettingsView: View {
 
     private var canLogin: Bool {
         !serverBaseURL.isEmpty &&
-        isValidURL &&
-        ((!username.isEmpty && !password.isEmpty) || !apiKey.isEmpty)
+            isValidURL &&
+            ((!username.isEmpty && !password.isEmpty) || !apiKey.isEmpty)
     }
 
     private func testConnection() async {
@@ -89,7 +89,7 @@ struct ServerSettingsView: View {
             let (_, response) = try await URLSession.shared.data(for: request)
 
             if let httpResponse = response as? HTTPURLResponse {
-                if (200...299).contains(httpResponse.statusCode) {
+                if (200 ... 299).contains(httpResponse.statusCode) {
                     connectionTestMessage = "서버에 성공적으로 연결되었습니다"
                 } else {
                     connectionTestMessage = "서버 응답 오류 (상태 코드: \(httpResponse.statusCode))"
@@ -131,12 +131,12 @@ struct ServerSettingsView: View {
 
         // Try multiple possible endpoints used by Kavita or proxies
         let endpoints = [
-            "/api/auth/login",          // JSON
-            "/api/account/login",       // sometimes used
-            "/auth/login",              // fallback
-            "/login"                     // HTML form
+            "/api/auth/login", // JSON
+            "/api/account/login", // sometimes used
+            "/auth/login", // fallback
+            "/login", // HTML form
         ]
-        var lastError: String = ""
+        var lastError = ""
 
         for path in endpoints {
             guard var comps = URLComponents(url: base, resolvingAgainstBaseURL: false) else { continue }
@@ -149,13 +149,14 @@ struct ServerSettingsView: View {
             // Use JSON for API-like endpoints; use form-encoded for classic /login
             if path == "/login" {
                 request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-                request.setValue("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", forHTTPHeaderField: "Accept")
+                request.setValue("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                                 forHTTPHeaderField: "Accept")
                 // broad compatibility: include common aliases for username/email and password
                 let pairs = [
                     ("username", urlEncode(username)),
                     ("user", urlEncode(username)),
                     ("email", urlEncode(username)),
-                    ("password", urlEncode(password))
+                    ("password", urlEncode(password)),
                 ]
                 let bodyString = pairs.map { "\($0)=\($1)" }.joined(separator: "&")
                 request.httpBody = bodyString.data(using: .utf8)
@@ -179,9 +180,10 @@ struct ServerSettingsView: View {
             do {
                 let (data, response) = try await URLSession.shared.data(for: request)
                 if let http = response as? HTTPURLResponse {
-
                     // detect token from common auth headers (e.g., Authorization: Bearer ... in response)
-                    if let authHeader = (http.allHeaderFields["Authorization"] as? String) ?? (http.allHeaderFields["authorization"] as? String) {
+                    if let authHeader = (http.allHeaderFields["Authorization"] as? String) ??
+                        (http.allHeaderFields["authorization"] as? String)
+                    {
                         if authHeader.lowercased().hasPrefix("bearer ") {
                             let t = String(authHeader.dropFirst("Bearer ".count))
                             if !t.isEmpty { saveTokenAndNotify(t); return }
@@ -196,9 +198,13 @@ struct ServerSettingsView: View {
                             let cookies = HTTPCookie.cookies(withResponseHeaderFields: headerFields, for: url)
                             for c in cookies {
                                 HTTPCookieStorage.shared.setCookie(c)
-                                // Some deployments put api key or jwt-like token into cookie (e.g., auth_token, api_key)
+                                // Some deployments put api key or jwt-like token into cookie (e.g., auth_token,
+                                // api_key)
                                 let nameLower = c.name.lowercased()
-                                if nameLower.contains("token") || nameLower.contains("jwt") || nameLower == "api_key" || nameLower == "apikey" || nameLower == "x-api-key" {
+                                if nameLower.contains("token") || nameLower
+                                    .contains("jwt") || nameLower == "api_key" || nameLower == "apikey" || nameLower ==
+                                    "x-api-key"
+                                {
                                     saveTokenAndNotify(c.value)
                                     return
                                 }
@@ -216,7 +222,8 @@ struct ServerSettingsView: View {
                     }
 
                     // if JSON returned, try to parse token-like fields
-                    let contentTypeRaw = (http.allHeaderFields["Content-Type"] as? String) ?? (http.allHeaderFields["content-type"] as? String)
+                    let contentTypeRaw = (http.allHeaderFields["Content-Type"] as? String) ??
+                        (http.allHeaderFields["content-type"] as? String)
                     if let contentType = contentTypeRaw?.lowercased(), contentType.contains("application/json") {
                         if let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
                             let tokenKeys = ["token", "access_token", "accessToken", "jwt", "api_key", "apiKey", "key"]
@@ -273,7 +280,8 @@ struct ServerSettingsView: View {
         do {
             var getReq = URLRequest(url: loginURL)
             getReq.httpMethod = "GET"
-            getReq.setValue("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", forHTTPHeaderField: "Accept")
+            getReq.setValue("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                            forHTTPHeaderField: "Accept")
             getReq.setValue(base.absoluteString, forHTTPHeaderField: "Referer")
             let (htmlData, getResp) = try await URLSession.shared.data(for: getReq)
             if let http = getResp as? HTTPURLResponse {
@@ -301,7 +309,7 @@ struct ServerSettingsView: View {
                 ("user", urlEncode(username)),
                 ("email", urlEncode(username)),
                 ("password", urlEncode(password)),
-                (param, urlEncode(token))
+                (param, urlEncode(token)),
             ]
             let bodyString = fields.map { "\($0)=\($1)" }.joined(separator: "&")
             post.httpBody = bodyString.data(using: .utf8)
@@ -312,7 +320,14 @@ struct ServerSettingsView: View {
                     let cookies = HTTPCookie.cookies(withResponseHeaderFields: headerFields, for: loginURL)
                     cookies.forEach { HTTPCookieStorage.shared.setCookie($0) }
                     // try to extract token-like cookie
-                    if let tok = readCookieValue(nameCandidates: ["auth_token", "jwt", "token", "api_key", "apikey", "x-api-key"]) {
+                    if let tok = readCookieValue(nameCandidates: [
+                        "auth_token",
+                        "jwt",
+                        "token",
+                        "api_key",
+                        "apikey",
+                        "x-api-key",
+                    ]) {
                         saveTokenAndNotify(tok)
                         return true
                     }
@@ -337,14 +352,22 @@ struct ServerSettingsView: View {
 
     private func extractCSRFToken(from html: String) -> (param: String, value: String)? {
         // Try common hidden input names
-        let candidates = ["__RequestVerificationToken", "__RequestAntiForgeryToken", "_csrf", "csrfmiddlewaretoken", "authenticity_token"]
+        let candidates = [
+            "__RequestVerificationToken",
+            "__RequestAntiForgeryToken",
+            "_csrf",
+            "csrfmiddlewaretoken",
+            "authenticity_token",
+        ]
         for name in candidates {
             if let value = match(html: html, pattern: "name=\\\"\(name)\\\"[^>]*value=\\\"([^\\\"]+)\\\"") {
                 return (name, value)
             }
         }
         // Try meta tag
-        if let content = match(html: html, pattern: "<meta[^>]*name=\\\"csrf-token\\\"[^>]*content=\\\"([^\\\"]+)\\\"") {
+        if let content = match(html: html,
+                               pattern: "<meta[^>]*name=\\\"csrf-token\\\"[^>]*content=\\\"([^\\\"]+)\\\"")
+        {
             return ("csrf-token", content)
         }
         return nil
@@ -353,12 +376,13 @@ struct ServerSettingsView: View {
     private func match(html: String, pattern: String) -> String? {
         do {
             let re = try NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators])
-            let range = NSRange(html.startIndex..<html.endIndex, in: html)
+            let range = NSRange(html.startIndex ..< html.endIndex, in: html)
             if let m = re.firstMatch(in: html, options: [], range: range), m.numberOfRanges > 1,
-               let r = Range(m.range(at: 1), in: html) {
+               let r = Range(m.range(at: 1), in: html)
+            {
                 return String(html[r])
             }
-        } catch { }
+        } catch {}
         return nil
     }
 
@@ -380,8 +404,8 @@ struct ServerSettingsView: View {
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         do {
             let (_, resp) = try await URLSession.shared.data(for: req)
-            if let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) { return true }
-        } catch { }
+            if let http = resp as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) { return true }
+        } catch {}
         return false
     }
 
@@ -402,7 +426,6 @@ struct ServerSettingsView: View {
         showLoginAlert = true
     }
 
-
     // MARK: - Helpers
 
     private func urlEncode(_ s: String) -> String {
@@ -418,7 +441,6 @@ struct ServerSettingsView: View {
         // binary data -> show size
         return "<binary data, \(data.count) bytes>"
     }
-
 
     private func normalizeToken(_ raw: String) -> String {
         var t = raw.trimmingCharacters(in: .whitespacesAndNewlines)

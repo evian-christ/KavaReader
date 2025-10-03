@@ -22,6 +22,8 @@ enum LibraryServiceError: Error, LocalizedError, Equatable {
     case imageLoadFailed(url: URL)
     case timeout
 
+    // MARK: Internal
+
     var errorDescription: String? {
         switch self {
         case .decodingFailed:
@@ -49,6 +51,8 @@ enum LibraryServiceError: Error, LocalizedError, Equatable {
         }
     }
 
+    // MARK: Private
+
     private func statusCodeMessage(for statusCode: Int) -> String {
         switch statusCode {
         case 401:
@@ -57,7 +61,7 @@ enum LibraryServiceError: Error, LocalizedError, Equatable {
             return "접근 권한이 없습니다."
         case 404:
             return "요청한 리소스를 찾을 수 없습니다."
-        case 500...599:
+        case 500 ... 599:
             return "서버에 문제가 발생했습니다. 잠시 후 다시 시도해주세요."
         default:
             return "서버 요청이 실패했습니다. (코드: \(statusCode))"
@@ -93,7 +97,7 @@ extension LibraryServiceError {
         switch self {
         case .networkFailure, .timeout, .serverUnavailable:
             return true
-        case .requestFailed(let code):
+        case let .requestFailed(code):
             return code >= 500 || code == 408 || code == 429
         case .imageLoadFailed:
             return true

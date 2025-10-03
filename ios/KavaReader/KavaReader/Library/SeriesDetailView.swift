@@ -1,29 +1,19 @@
-import SwiftUI
 import Combine
+import SwiftUI
 
 struct SeriesDetailView: View {
-    let series: LibrarySeries
-
-    @AppStorage("server_base_url") private var serverBaseURL: String = ""
-    @AppStorage("server_api_key") private var apiKey: String = ""
-
-    @StateObject private var viewModel: SeriesDetailViewModel
-    @State private var lastServiceKey: String = ""
-    @State private var selectedChapter: SeriesChapter?
-    @State private var showReader = false
-    @State private var isNavigatingToReader = false
-    @State private var hasContinuePoint = false
-    @State private var isCheckingContinuePoint = false
-
-    private let chapterGrid = [
-        GridItem(.adaptive(minimum: 100), spacing: 12)
-    ]
+    // MARK: Lifecycle
 
     init(series: LibrarySeries) {
         self.series = series
         _viewModel = StateObject(wrappedValue: SeriesDetailViewModel(service: LibraryServiceFactory(baseURLString: nil,
-                                                                                                   apiKey: nil).makeService()))
+                                                                                                    apiKey: nil)
+                .makeService()))
     }
+
+    // MARK: Internal
+
+    let series: LibrarySeries
 
     var body: some View {
         ScrollView {
@@ -67,10 +57,37 @@ struct SeriesDetailView: View {
         .navigationDestination(isPresented: $isNavigatingToReader) {
             if let selectedChapter = selectedChapter {
                 ReaderView(series: series,
-                          chapter: selectedChapter,
-                          serviceFactory: currentFactory)
+                           chapter: selectedChapter,
+                           serviceFactory: currentFactory)
             }
         }
+    }
+
+    // MARK: Private
+
+    @AppStorage("server_base_url") private var serverBaseURL: String = ""
+    @AppStorage("server_api_key") private var apiKey: String = ""
+
+    @StateObject private var viewModel: SeriesDetailViewModel
+    @State private var lastServiceKey: String = ""
+    @State private var selectedChapter: SeriesChapter?
+    @State private var showReader = false
+    @State private var isNavigatingToReader = false
+    @State private var hasContinuePoint = false
+    @State private var isCheckingContinuePoint = false
+
+    private let chapterGrid = [
+        GridItem(.adaptive(minimum: 100), spacing: 12),
+    ]
+
+    @MainActor
+    private var gradientColors: [Color] {
+        let colors = series.coverColorHexes.compactMap(Color.init(hex:))
+        return colors.isEmpty ? [.purple, .blue] : colors
+    }
+
+    private var currentFactory: LibraryServiceFactory {
+        LibraryServiceFactory(baseURLString: serverBaseURL, apiKey: apiKey.isEmpty ? nil : apiKey)
     }
 
     private var heroSection: some View {
@@ -81,7 +98,8 @@ struct SeriesDetailView: View {
                     CoverImageView(url: url, height: 320, cornerRadius: 16, gradientColors: gradientColors)
                 } else {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(LinearGradient(colors: gradientColors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .fill(LinearGradient(colors: gradientColors, startPoint: .topLeading,
+                                             endPoint: .bottomTrailing))
                         .frame(height: 320)
                 }
             }
@@ -122,9 +140,7 @@ struct SeriesDetailView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 32)
                 .padding(.vertical, 12)
-                .background(
-                    LinearGradient(colors: gradientColors, startPoint: .leading, endPoint: .trailing)
-                )
+                .background(LinearGradient(colors: gradientColors, startPoint: .leading, endPoint: .trailing))
                 .clipShape(RoundedRectangle(cornerRadius: 25))
             }
             .disabled(viewModel.detail?.chapters.isEmpty ?? true || isCheckingContinuePoint)
@@ -162,16 +178,6 @@ struct SeriesDetailView: View {
             .padding(.horizontal, 24)
         }
         .padding(.bottom, 32)
-    }
-
-    @MainActor
-    private var gradientColors: [Color] {
-        let colors = series.coverColorHexes.compactMap(Color.init(hex:))
-        return colors.isEmpty ? [.purple, .blue] : colors
-    }
-
-    private var currentFactory: LibraryServiceFactory {
-        LibraryServiceFactory(baseURLString: serverBaseURL, apiKey: apiKey.isEmpty ? nil : apiKey)
     }
 
     private func loadSeries(force: Bool = false) async {
@@ -219,41 +225,36 @@ struct SeriesDetailView: View {
     }
 
     private func startReading() async {
-
         guard let kavitaSeriesId = series.kavitaSeriesId else {
             // Kavita ID가 없으면 첫 번째 챕터로
             if let firstChapter = viewModel.detail?.chapters.first {
                 selectedChapter = firstChapter
                 isNavigatingToReader = true
-            } else {
-            }
+            } else {}
             return
         }
-
 
         // Continue Point API로 마지막 읽은 위치 확인
         if let kavitaService = currentFactory.makeService() as? KavitaLibraryService {
             do {
                 if let continuePoint = try await kavitaService.getContinuePoint(seriesId: kavitaSeriesId) {
-
                     // 해당 챕터를 찾아서 이동
-                    if let targetChapter = viewModel.detail?.chapters.first(where: { $0.kavitaChapterId == continuePoint.chapterId }) {
+                    if let targetChapter = viewModel.detail?.chapters
+                        .first(where: { $0.kavitaChapterId == continuePoint.chapterId })
+                    {
                         selectedChapter = targetChapter
                         isNavigatingToReader = true
                         return
-                    } else {
-                    }
+                    } else {}
                 }
-            } catch {
-            }
+            } catch {}
         }
 
         // Continue Point를 찾지 못했거나 에러가 발생한 경우 첫 번째 챕터로
         if let firstChapter = viewModel.detail?.chapters.first {
             selectedChapter = firstChapter
             isNavigatingToReader = true
-        } else {
-        }
+        } else {}
     }
 }
 
@@ -268,18 +269,17 @@ private struct ChapterCoverView: View {
                     CoverImageView(url: coverURL, height: 130, cornerRadius: 8, gradientColors: seriesCoverColors)
                 } else {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(LinearGradient(colors: seriesCoverColors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .fill(LinearGradient(colors: seriesCoverColors, startPoint: .topLeading,
+                                             endPoint: .bottomTrailing))
                         .frame(height: 130)
-                        .overlay(
-                            VStack {
-                                Image(systemName: "book.pages.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(.white.opacity(0.8))
-                                Text("Ch.\(Int(chapter.number))")
-                                    .font(.caption.weight(.medium))
-                                    .foregroundStyle(.white)
-                            }
-                        )
+                        .overlay(VStack {
+                            Image(systemName: "book.pages.fill")
+                                .font(.title2)
+                                .foregroundStyle(.white.opacity(0.8))
+                            Text("Ch.\(Int(chapter.number))")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.white)
+                        })
                 }
             }
             .frame(height: 130)
@@ -322,11 +322,9 @@ private struct ErrorView: View {
 
 #Preview {
     NavigationStack {
-        SeriesDetailView(series: LibrarySeries(
-            kavitaSeriesId: 454,
-            title: "그리스 로마 신화",
-            author: "박시연",
-            coverColorHexes: ["#FF5F6D", "#FFC371"]
-        ))
+        SeriesDetailView(series: LibrarySeries(kavitaSeriesId: 454,
+                                               title: "그리스 로마 신화",
+                                               author: "박시연",
+                                               coverColorHexes: ["#FF5F6D", "#FFC371"]))
     }
 }

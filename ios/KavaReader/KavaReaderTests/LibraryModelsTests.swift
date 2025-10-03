@@ -1,21 +1,18 @@
-import XCTest
-@testable import KavaReader
 import Foundation
+@testable import KavaReader
+import XCTest
 
 @MainActor
 final class LibraryModelsTests: XCTestCase {
-
     func testSeriesInfoToLibrarySeries() {
         // Given
         let id = UUID()
-        let seriesInfo = SeriesInfo(
-            id: id,
-            kavitaSeriesId: 123,
-            title: "Test Series",
-            author: "Test Author",
-            coverColorHexes: ["#FF0000", "#00FF00"],
-            coverURL: URL(string: "https://example.com/cover.jpg")
-        )
+        let seriesInfo = SeriesInfo(id: id,
+                                    kavitaSeriesId: 123,
+                                    title: "Test Series",
+                                    author: "Test Author",
+                                    coverColorHexes: ["#FF0000", "#00FF00"],
+                                    coverURL: URL(string: "https://example.com/cover.jpg"))
 
         // When
         let librarySeries = seriesInfo.toLibrarySeries()
@@ -38,13 +35,11 @@ final class LibraryModelsTests: XCTestCase {
         let coverURL = URL(string: "https://example.com/another-cover.jpg")
 
         // When
-        let librarySeries = LibrarySeries(
-            kavitaSeriesId: kavitaSeriesId,
-            title: title,
-            author: author,
-            coverColorHexes: colors,
-            coverURL: coverURL
-        )
+        let librarySeries = LibrarySeries(kavitaSeriesId: kavitaSeriesId,
+                                          title: title,
+                                          author: author,
+                                          coverColorHexes: colors,
+                                          coverURL: coverURL)
 
         // Then
         XCTAssertNotNil(librarySeries.id) // UUID should be generated
@@ -57,29 +52,23 @@ final class LibraryModelsTests: XCTestCase {
 
     func testLibrarySectionWithSeriesConversion() {
         // Given
-        let seriesInfo1 = SeriesInfo(
-            id: UUID(),
-            kavitaSeriesId: 1,
-            title: "Series 1",
-            author: "Author 1",
-            coverColorHexes: ["#FF0000"],
-            coverURL: nil
-        )
+        let seriesInfo1 = SeriesInfo(id: UUID(),
+                                     kavitaSeriesId: 1,
+                                     title: "Series 1",
+                                     author: "Author 1",
+                                     coverColorHexes: ["#FF0000"],
+                                     coverURL: nil)
 
-        let seriesInfo2 = SeriesInfo(
-            id: UUID(),
-            kavitaSeriesId: 2,
-            title: "Series 2",
-            author: "Author 2",
-            coverColorHexes: ["#00FF00"],
-            coverURL: nil
-        )
+        let seriesInfo2 = SeriesInfo(id: UUID(),
+                                     kavitaSeriesId: 2,
+                                     title: "Series 2",
+                                     author: "Author 2",
+                                     coverColorHexes: ["#00FF00"],
+                                     coverURL: nil)
 
-        let section = LibrarySection(
-            id: UUID(),
-            title: "Test Section",
-            items: [seriesInfo1, seriesInfo2]
-        )
+        let section = LibrarySection(id: UUID(),
+                                     title: "Test Section",
+                                     items: [seriesInfo1, seriesInfo2])
 
         // When
         let series = section.series
@@ -104,16 +93,14 @@ final class LibraryModelsTests: XCTestCase {
         let coverURL = URL(string: "https://example.com/chapter-cover.jpg")
 
         // When
-        let chapter = SeriesChapter(
-            id: id,
-            title: title,
-            number: number,
-            pageCount: pageCount,
-            lastReadPage: lastReadPage,
-            kavitaVolumeId: kavitaVolumeId,
-            kavitaChapterId: kavitaChapterId,
-            coverImageURL: coverURL
-        )
+        let chapter = SeriesChapter(id: id,
+                                    title: title,
+                                    number: number,
+                                    pageCount: pageCount,
+                                    lastReadPage: lastReadPage,
+                                    kavitaVolumeId: kavitaVolumeId,
+                                    kavitaChapterId: kavitaChapterId,
+                                    coverImageURL: coverURL)
 
         // Then
         XCTAssertEqual(chapter.id, id)
@@ -134,31 +121,25 @@ final class LibraryModelsTests: XCTestCase {
         let summary = "This is a test summary"
         let coverURL = URL(string: "https://example.com/detail-cover.jpg")
 
-        let chapter1 = SeriesChapter(
-            id: UUID(),
-            title: "Chapter 1",
-            number: 1.0,
-            pageCount: 20
-        )
+        let chapter1 = SeriesChapter(id: UUID(),
+                                     title: "Chapter 1",
+                                     number: 1.0,
+                                     pageCount: 20)
 
-        let chapter2 = SeriesChapter(
-            id: UUID(),
-            title: "Chapter 2",
-            number: 2.0,
-            pageCount: 25
-        )
+        let chapter2 = SeriesChapter(id: UUID(),
+                                     title: "Chapter 2",
+                                     number: 2.0,
+                                     pageCount: 25)
 
         let chapters = [chapter1, chapter2]
 
         // When
-        let seriesDetail = SeriesDetail(
-            id: id,
-            title: title,
-            author: author,
-            summary: summary,
-            coverImageURL: coverURL,
-            chapters: chapters
-        )
+        let seriesDetail = SeriesDetail(id: id,
+                                        title: title,
+                                        author: author,
+                                        summary: summary,
+                                        coverImageURL: coverURL,
+                                        chapters: chapters)
 
         // Then
         XCTAssertEqual(seriesDetail.id, id)
@@ -174,14 +155,12 @@ final class LibraryModelsTests: XCTestCase {
     func testLibrarySectionEquality() {
         // Given
         let id = UUID()
-        let seriesInfo = SeriesInfo(
-            id: UUID(),
-            kavitaSeriesId: 1,
-            title: "Test",
-            author: "Author",
-            coverColorHexes: ["#FF0000"],
-            coverURL: nil
-        )
+        let seriesInfo = SeriesInfo(id: UUID(),
+                                    kavitaSeriesId: 1,
+                                    title: "Test",
+                                    author: "Author",
+                                    coverColorHexes: ["#FF0000"],
+                                    coverURL: nil)
 
         let section1 = LibrarySection(id: id, title: "Section", items: [seriesInfo])
         let section2 = LibrarySection(id: id, title: "Section", items: [seriesInfo])
@@ -195,14 +174,12 @@ final class LibraryModelsTests: XCTestCase {
     func testLibrarySectionHashing() {
         // Given
         let id = UUID()
-        let seriesInfo = SeriesInfo(
-            id: UUID(),
-            kavitaSeriesId: 1,
-            title: "Test",
-            author: "Author",
-            coverColorHexes: ["#FF0000"],
-            coverURL: nil
-        )
+        let seriesInfo = SeriesInfo(id: UUID(),
+                                    kavitaSeriesId: 1,
+                                    title: "Test",
+                                    author: "Author",
+                                    coverColorHexes: ["#FF0000"],
+                                    coverURL: nil)
 
         let section1 = LibrarySection(id: id, title: "Section", items: [seriesInfo])
         let section2 = LibrarySection(id: id, title: "Section", items: [seriesInfo])

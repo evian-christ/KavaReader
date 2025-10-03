@@ -45,19 +45,19 @@ private struct InvalidBaseURLLibraryService: LibraryServicing {
         throw LibraryServiceError.invalidBaseURL
     }
 
-    func fetchFullSection(sectionTitle: String) async throws -> [LibrarySeries] {
+    func fetchFullSection(sectionTitle _: String) async throws -> [LibrarySeries] {
         throw LibraryServiceError.invalidBaseURL
     }
 
-    func fetchSeriesDetail(kavitaSeriesId: Int) async throws -> SeriesDetail {
+    func fetchSeriesDetail(kavitaSeriesId _: Int) async throws -> SeriesDetail {
         throw LibraryServiceError.invalidBaseURL
     }
 
-    func pageImageURL(seriesID: UUID, chapterID: UUID, pageNumber: Int) throws -> URL {
+    func pageImageURL(seriesID _: UUID, chapterID _: UUID, pageNumber _: Int) throws -> URL {
         throw LibraryServiceError.invalidBaseURL
     }
 
-    func fetchPageImage(seriesID: UUID, chapterID: UUID, pageNumber: Int) async throws -> Data {
+    func fetchPageImage(seriesID _: UUID, chapterID _: UUID, pageNumber _: Int) async throws -> Data {
         throw LibraryServiceError.invalidBaseURL
     }
 
@@ -73,19 +73,19 @@ private struct UnsupportedSchemeLibraryService: LibraryServicing {
         throw LibraryServiceError.unsupportedScheme(scheme)
     }
 
-    func fetchFullSection(sectionTitle: String) async throws -> [LibrarySeries] {
+    func fetchFullSection(sectionTitle _: String) async throws -> [LibrarySeries] {
         throw LibraryServiceError.unsupportedScheme(scheme)
     }
 
-    func fetchSeriesDetail(kavitaSeriesId: Int) async throws -> SeriesDetail {
+    func fetchSeriesDetail(kavitaSeriesId _: Int) async throws -> SeriesDetail {
         throw LibraryServiceError.unsupportedScheme(scheme)
     }
 
-    func pageImageURL(seriesID: UUID, chapterID: UUID, pageNumber: Int) throws -> URL {
+    func pageImageURL(seriesID _: UUID, chapterID _: UUID, pageNumber _: Int) throws -> URL {
         throw LibraryServiceError.unsupportedScheme(scheme)
     }
 
-    func fetchPageImage(seriesID: UUID, chapterID: UUID, pageNumber: Int) async throws -> Data {
+    func fetchPageImage(seriesID _: UUID, chapterID _: UUID, pageNumber _: Int) async throws -> Data {
         throw LibraryServiceError.unsupportedScheme(scheme)
     }
 

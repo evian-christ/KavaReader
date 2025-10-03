@@ -119,14 +119,14 @@ struct ContentView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
                     ForEach(viewModel.continueReadingItems) { item in
-                        NavigationLink(destination: ReaderView(
-                            series: item.series,
-                            chapter: item.lastReadChapter,
-                            serviceFactory: LibraryServiceFactory(
-                                baseURLString: serverBaseURL,
-                                apiKey: apiKey.isEmpty ? nil : apiKey
-                            )
-                        )) {
+                        NavigationLink(destination: ReaderView(series: item.series,
+                                                               chapter: item.lastReadChapter,
+                                                               serviceFactory: LibraryServiceFactory(baseURLString: serverBaseURL,
+                                                                                                     apiKey: apiKey
+                                                                                                         .isEmpty ?
+                                                                                                         nil :
+                                                                                                         apiKey)))
+                        {
                             ContinueReadingItemView(item: item)
                         }
                         .buttonStyle(.plain)
@@ -165,23 +165,22 @@ private struct LibraryCoverView: View {
                 } else {
                     // Fallback view when no cover URL - show title and author
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(LinearGradient(colors: gradientColors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .fill(LinearGradient(colors: gradientColors, startPoint: .topLeading,
+                                             endPoint: .bottomTrailing))
                         .frame(height: 180)
-                        .overlay(
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(series.title)
-                                    .font(.subheadline.weight(.medium))
-                                    .foregroundStyle(.white)
-                                    .lineLimit(2)
-                                if !series.author.isEmpty {
-                                    Text(series.author)
-                                        .font(.caption2)
-                                        .foregroundStyle(.white.opacity(0.8))
-                                }
+                        .overlay(VStack(alignment: .leading, spacing: 4) {
+                            Text(series.title)
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(.white)
+                                .lineLimit(2)
+                            if !series.author.isEmpty {
+                                Text(series.author)
+                                    .font(.caption2)
+                                    .foregroundStyle(.white.opacity(0.8))
                             }
-                            .padding(12),
-                            alignment: .bottomLeading
-                        )
+                        }
+                        .padding(12),
+                        alignment: .bottomLeading)
                 }
             }
         }
@@ -219,6 +218,8 @@ private struct MoreButtonView: View {
 }
 
 private struct ContinueReadingItemView: View {
+    // MARK: Internal
+
     let item: ContinueReadingItem
 
     var body: some View {
@@ -229,7 +230,8 @@ private struct ContinueReadingItemView: View {
                     CoverImageView(url: url, height: 180, cornerRadius: 12, gradientColors: gradientColors)
                 } else {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(LinearGradient(colors: gradientColors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .fill(LinearGradient(colors: gradientColors, startPoint: .topLeading,
+                                             endPoint: .bottomTrailing))
                         .frame(height: 180)
                 }
 
@@ -266,6 +268,8 @@ private struct ContinueReadingItemView: View {
         }
         .frame(width: 130)
     }
+
+    // MARK: Private
 
     @MainActor
     private var gradientColors: [Color] {

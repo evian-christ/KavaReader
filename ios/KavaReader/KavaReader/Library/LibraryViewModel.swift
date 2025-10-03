@@ -16,9 +16,6 @@ final class LibraryViewModel: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var errorMessage: String?
 
-    private var cachedSections: [LibrarySection]?
-    private var lastServiceKey: String?
-
     func load(force: Bool = false) async {
         guard !isLoading else { return }
 
@@ -71,6 +68,9 @@ final class LibraryViewModel: ObservableObject {
     }
 
     // MARK: Private
+
+    private var cachedSections: [LibrarySection]?
+    private var lastServiceKey: String?
 
     private var service: LibraryServicing
 }
