@@ -385,14 +385,6 @@ private struct ZoomableScrollView: UIViewRepresentable {
             let maxScale = max(baseScale * parent.maxZoom, baseScale)
             let minZoomScale = max(0.1, min(baseScale, min(xScale, yScale)) * 0.5)
 
-            print("📐 [Page \(parent.pageNumber)] Zoom Config:")
-            print("  - Image size: \(image.size.width) x \(image.size.height)")
-            print("  - Bounds size: \(boundsSize.width) x \(boundsSize.height)")
-            print("  - xScale: \(xScale), yScale: \(yScale)")
-            print("  - baseScale: \(baseScale)")
-            print("  - resetZoom: \(resetZoom), newImage: \(newImage)")
-            print("  - current scrollView.zoomScale: \(scrollView.zoomScale)")
-
             baseZoomScale = baseScale
             maxZoomScale = maxScale
             self.minZoomScale = minZoomScale
@@ -408,15 +400,9 @@ private struct ZoomableScrollView: UIViewRepresentable {
                 targetScale = max(minZoomScale, min(maxScale, currentRelative * baseScale))
             }
 
-            print("  - targetScale: \(targetScale)")
-            print("  - minZoomScale: \(minZoomScale), maxScale: \(maxScale)")
-
             // zoomScale을 먼저 설정한 후 contentSize 설정
             if abs(scrollView.zoomScale - targetScale) > 0.01 || newImage {
-                print("  ⚠️ Setting zoomScale from \(scrollView.zoomScale) to \(targetScale)")
                 scrollView.zoomScale = targetScale
-            } else {
-                print("  ✓ ZoomScale already correct")
             }
 
             if newImage {
@@ -489,19 +475,11 @@ private struct ZoomableScrollView: UIViewRepresentable {
                                           height: imageSize.height * zoomScale)
             if abs(imageView.frame.width - expectedFrameSize.width) > 1.0 ||
                abs(imageView.frame.height - expectedFrameSize.height) > 1.0 {
-                print("⚠️ [Page \(parent.pageNumber)] Fixing imageView.frame from \(imageView.frame.size) to \(expectedFrameSize)")
                 imageView.frame.size = expectedFrameSize
             }
 
             let displayWidth = imageSize.width * zoomScale
             let displayHeight = imageSize.height * zoomScale
-
-            print("🖼️ [Page \(parent.pageNumber)] centerImage:")
-            print("  - scrollView.zoomScale: \(zoomScale)")
-            print("  - imageView.frame: \(imageView.frame)")
-            print("  - imageView.bounds: \(imageView.bounds)")
-            print("  - contentSize: \(scrollView.contentSize)")
-            print("  - displaySize: \(displayWidth) x \(displayHeight)")
 
             let horizontalPadding = max(0, (boundsSize.width - displayWidth) / 2)
             let verticalPadding = max(0, (boundsSize.height - displayHeight) / 2)

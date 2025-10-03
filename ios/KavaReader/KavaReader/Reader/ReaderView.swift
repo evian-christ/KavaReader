@@ -250,9 +250,6 @@ struct ReaderView: View {
         .task {
             await viewModel.loadChapter()
         }
-        .onChange(of: viewModel.currentPage) { oldValue, newValue in
-            print("📖 Current page changed: \(oldValue) -> \(newValue)")
-        }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
             // 앱이 백그라운드로 갈 때 진행률 저장
             Task {
