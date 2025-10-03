@@ -8,6 +8,8 @@ private enum ZoomTapRegion {
 }
 
 struct ZoomableImageView: View {
+    // MARK: Internal
+
     let pageNumber: Int
     let viewModel: ReaderViewModel
     let isActive: Bool
@@ -15,6 +17,89 @@ struct ZoomableImageView: View {
     let onTap: () -> Void
     let onPageChange: (Int) -> Void
     let onInteractionChange: (Bool) -> Void
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                Color.black
+                    .ignoresSafeArea(.all)
+
+                if let image = displayedImage {
+                    ZoomableScrollView(pageNumber: pageNumber,
+                                       image: image,
+                                       zoomScale: $zoomScale,
+                                       isInteracting: $isInteracting,
+                                       maxZoom: maxZoom,
+                                       tapZoneWidth: tapZoneWidth,
+                                       resetTrigger: resetToken,
+                                       pageFitMode: pageFitMode,
+                                       onSingleTap: handleSingleTap)
+                        .transition(.opacity)
+                } else if isLoading {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .tint(.white)
+                } else if let error = loadError {
+                    VStack(spacing: 12) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                            .font(.system(size: 24))
+
+                        Text(error)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
+
+                        Button(action: {
+                            Task {
+                                await loadImage()
+                            }
+                        }) {
+                            Text("다시 시도")
+                                .font(.system(size: 13, weight: .semibold))
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(Color.white.opacity(0.2))
+                                .cornerRadius(8)
+                        }
+                    }
+                    .padding(24)
+                } else {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .tint(.white)
+                }
+
+                // 로딩 중에도 탭 제스처를 받을 수 있도록 투명 오버레이 추가
+                if displayedImage == nil {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { location in
+                            let width = geometry.size.width
+                            if location.x < tapZoneWidth {
+                                handleSingleTap(region: .left)
+                            } else if location.x > width - tapZoneWidth {
+                                handleSingleTap(region: .right)
+                            } else {
+                                handleSingleTap(region: .center)
+                            }
+                        }
+                }
+            }
+            .onChange(of: isInteracting) { _, newValue in
+                onInteractionChange(newValue)
+            }
+            .onChange(of: isActive) { _, newValue in
+                guard newValue else { return }
+                requestZoomReset()
+            }
+            .task(id: pageNumber) {
+                await loadImage()
+            }
+        }
+    }
+
+    // MARK: Private
 
     @State private var zoomScale: CGFloat = 1.0
     @State private var isInteracting = false
@@ -27,74 +112,10 @@ struct ZoomableImageView: View {
     private let minZoom: CGFloat = 1.0
     private let maxZoom: CGFloat = 4.0
 
-    var body: some View {
-        ZStack {
-            Color.black
-                .ignoresSafeArea(.all)
-
-            if let image = displayedImage {
-                ZoomableScrollView(
-                    image: image,
-                    zoomScale: $zoomScale,
-                    isInteracting: $isInteracting,
-                    maxZoom: maxZoom,
-                    tapZoneWidth: tapZoneWidth,
-                    resetTrigger: resetToken,
-                    pageFitMode: pageFitMode,
-                    onSingleTap: handleSingleTap
-                )
-                .transition(.opacity)
-            } else if isLoading {
-                ProgressView()
-                    .progressViewStyle(.circular)
-                    .tint(.white)
-            } else if let error = loadError {
-                VStack(spacing: 12) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.orange)
-                        .font(.system(size: 24))
-
-                    Text(error)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-
-                    Button(action: {
-                        Task {
-                            await loadImage()
-                        }
-                    }) {
-                        Text("다시 시도")
-                            .font(.system(size: 13, weight: .semibold))
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(Color.white.opacity(0.2))
-                            .cornerRadius(8)
-                    }
-                }
-                .padding(24)
-            } else {
-                ProgressView()
-                    .progressViewStyle(.circular)
-                    .tint(.white)
-            }
-        }
-        .onChange(of: isInteracting) { _, newValue in
-            onInteractionChange(newValue)
-        }
-        .onChange(of: isActive) { _, newValue in
-            guard newValue else { return }
-            requestZoomReset()
-        }
-        .task(id: pageNumber) {
-            await loadImage()
-        }
-    }
-
     private func handleSingleTap(region: ZoomTapRegion) {
         switch region {
         case .left:
-            if zoomScale <= minZoom + 0.01 && pageNumber > 1 {
+            if zoomScale <= minZoom + 0.01, pageNumber > 1 {
                 onPageChange(pageNumber - 1)
             } else {
                 onTap()
@@ -102,7 +123,7 @@ struct ZoomableImageView: View {
         case .center:
             onTap()
         case .right:
-            if zoomScale <= minZoom + 0.01 && pageNumber < viewModel.totalPages {
+            if zoomScale <= minZoom + 0.01, pageNumber < viewModel.totalPages {
                 onPageChange(pageNumber + 1)
             } else {
                 onTap()
@@ -152,6 +173,7 @@ struct ZoomableImageView: View {
 }
 
 private struct ZoomableScrollView: UIViewRepresentable {
+    let pageNumber: Int
     let image: UIImage
     @Binding var zoomScale: CGFloat
     @Binding var isInteracting: Bool
@@ -200,12 +222,7 @@ private struct ZoomableScrollView: UIViewRepresentable {
     }
 
     final class Coordinator: NSObject, UIScrollViewDelegate, UIGestureRecognizerDelegate {
-        var parent: ZoomableScrollView
-        let imageView = UIImageView()
-        var baseZoomScale: CGFloat = 1.0
-        var maxZoomScale: CGFloat = 4.0
-        var minZoomScale: CGFloat = 1.0
-        private var previousBoundsSize: CGSize = .zero
+        // MARK: Lifecycle
 
         init(parent: ZoomableScrollView) {
             self.parent = parent
@@ -214,6 +231,14 @@ private struct ZoomableScrollView: UIViewRepresentable {
             imageView.isUserInteractionEnabled = false
             maxZoomScale = parent.maxZoom
         }
+
+        // MARK: Internal
+
+        var parent: ZoomableScrollView
+        let imageView = UIImageView()
+        var baseZoomScale: CGFloat = 1.0
+        var maxZoomScale: CGFloat = 4.0
+        var minZoomScale: CGFloat = 1.0
 
         func setup(in scrollView: UIScrollView) {
             scrollView.addSubview(imageView)
@@ -229,8 +254,6 @@ private struct ZoomableScrollView: UIViewRepresentable {
             scrollView.addGestureRecognizer(singleTap)
         }
 
-        private var lastResetTrigger: Int = -1
-
         func update(image: UIImage, in scrollView: UIScrollView, resetZoom: Bool, resetTrigger: Int) {
             let isNewImage: Bool
             if imageView.image === image {
@@ -243,90 +266,19 @@ private struct ZoomableScrollView: UIViewRepresentable {
 
             let boundsChanged = scrollView.bounds.size != previousBoundsSize
             let shouldReset = resetZoom || isNewImage || boundsChanged || resetTrigger != lastResetTrigger
-            if configureZoomScales(for: scrollView, resetZoom: shouldReset, newImage: isNewImage, resetTrigger: resetTrigger) {
+            if configureZoomScales(for: scrollView, resetZoom: shouldReset, newImage: isNewImage,
+                                   resetTrigger: resetTrigger)
+            {
                 previousBoundsSize = scrollView.bounds.size
                 lastResetTrigger = resetTrigger
             }
         }
 
-        @discardableResult
-        private func configureZoomScales(for scrollView: UIScrollView, resetZoom: Bool, newImage: Bool, resetTrigger: Int) -> Bool {
-            guard let image = imageView.image, image.size.width > 0, image.size.height > 0 else { return false }
-            let boundsSize = scrollView.bounds.size
-            guard boundsSize.width > 0 && boundsSize.height > 0 else {
-                DispatchQueue.main.async { [weak self, weak scrollView] in
-                    guard
-                        let self,
-                        let scrollView = scrollView,
-                        let _ = self.imageView.image
-                    else { return }
-                    _ = self.configureZoomScales(for: scrollView, resetZoom: resetZoom, newImage: newImage, resetTrigger: resetTrigger)
-                }
-                return false
-            }
-
-            let xScale = boundsSize.width / image.size.width
-            let yScale = boundsSize.height / image.size.height
-
-            // Calculate base scale based on page fit mode
-            let baseScale: CGFloat
-            switch parent.pageFitMode {
-            case .fitWidth:
-                baseScale = xScale
-            case .fitHeight:
-                baseScale = yScale
-            case .fitScreen:
-                baseScale = min(xScale, yScale)
-            case .original:
-                baseScale = 1.0
-            }
-
-            let maxScale = max(baseScale * parent.maxZoom, baseScale)
-            let minZoomScale = max(0.1, min(baseScale, min(xScale, yScale)) * 0.5)
-
-            baseZoomScale = baseScale
-            maxZoomScale = maxScale
-            self.minZoomScale = minZoomScale
-            scrollView.minimumZoomScale = minZoomScale
-            scrollView.maximumZoomScale = maxScale
-
-            let minRelative = minZoomScale / max(baseScale, 0.0001)
-            let currentRelative = max(parent.zoomScale, minRelative)
-            let targetScale: CGFloat
-            if resetZoom {
-                targetScale = baseScale
-            } else {
-                targetScale = max(minZoomScale, min(maxScale, currentRelative * baseScale))
-            }
-
-            if newImage {
-                scrollView.contentSize = image.size
-            }
-
-            if abs(scrollView.zoomScale - targetScale) > 0.01 {
-                scrollView.zoomScale = targetScale
-            }
-
-            let normalizedScale = targetScale / baseScale
-            if abs(parent.zoomScale - normalizedScale) > 0.0001 {
-                parent.zoomScale = normalizedScale
-            }
-            centerImage(in: scrollView)
-            updateInteractionState(for: scrollView)
-            if resetZoom {
-                if parent.isInteracting {
-                    parent.isInteracting = false
-                }
-                scrollView.setContentOffset(.zero, animated: false)
-            }
-            return true
-        }
-
-        func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+        func viewForZooming(in _: UIScrollView) -> UIView? {
             imageView
         }
 
-        func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
+        func scrollViewWillBeginZooming(_: UIScrollView, with _: UIView?) {
             parent.isInteracting = true
         }
 
@@ -336,11 +288,11 @@ private struct ZoomableScrollView: UIViewRepresentable {
             if abs(parent.zoomScale - normalizedScale) > 0.0001 {
                 parent.zoomScale = normalizedScale
             }
-            centerImage(in: scrollView)
+            centerImage(in: scrollView, resetPosition: false)
             updateInteractionState(for: scrollView)
         }
 
-        func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
+        func scrollViewDidEndZooming(_ scrollView: UIScrollView, with _: UIView?, atScale scale: CGFloat) {
             guard baseZoomScale > 0 else { return }
             let normalizedScale = scale / baseZoomScale
             if abs(parent.zoomScale - normalizedScale) > 0.0001 {
@@ -348,11 +300,9 @@ private struct ZoomableScrollView: UIViewRepresentable {
             }
             if scale < baseZoomScale - 0.001 {
                 scrollView.setZoomScale(baseZoomScale, animated: true)
-                scrollView.setContentOffset(.zero, animated: true)
-                if abs(parent.zoomScale - 1.0) > 0.0001 {
-                    parent.zoomScale = 1.0
-                }
+                parent.zoomScale = 1.0
             }
+            centerImage(in: scrollView, resetPosition: true)
             updateInteractionState(for: scrollView)
         }
 
@@ -374,13 +324,108 @@ private struct ZoomableScrollView: UIViewRepresentable {
             updateInteractionState(for: scrollView)
         }
 
+        func gestureRecognizer(_: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith _: UIGestureRecognizer) -> Bool
+        {
+            true
+        }
+
+        // MARK: Private
+
+        private var previousBoundsSize: CGSize = .zero
+
+        private var lastResetTrigger: Int = -1
+
+        @discardableResult
+        private func configureZoomScales(for scrollView: UIScrollView, resetZoom: Bool, newImage: Bool,
+                                         resetTrigger: Int) -> Bool
+        {
+            guard let image = imageView.image, image.size.width > 0, image.size.height > 0 else { return false }
+            let boundsSize = scrollView.bounds.size
+            guard boundsSize.width > 0 && boundsSize.height > 0 else {
+                DispatchQueue.main.async { [weak self, weak scrollView] in
+                    guard
+                        let self,
+                        let scrollView = scrollView,
+                        let _ = self.imageView.image
+                    else { return }
+                    _ = self.configureZoomScales(for: scrollView, resetZoom: resetZoom, newImage: newImage,
+                                                 resetTrigger: resetTrigger)
+                }
+                return false
+            }
+
+            let xScale = boundsSize.width / image.size.width
+            let yScale = boundsSize.height / image.size.height
+
+            // 현재는 너비에 맞춤만 사용되므로 xScale을 기본 배율로 사용
+            let baseScale = xScale
+
+            let maxScale = max(baseScale * parent.maxZoom, baseScale)
+            let minZoomScale = max(0.1, min(baseScale, min(xScale, yScale)) * 0.5)
+
+            print("📐 [Page \(parent.pageNumber)] Zoom Config:")
+            print("  - Image size: \(image.size.width) x \(image.size.height)")
+            print("  - Bounds size: \(boundsSize.width) x \(boundsSize.height)")
+            print("  - xScale: \(xScale), yScale: \(yScale)")
+            print("  - baseScale: \(baseScale)")
+            print("  - resetZoom: \(resetZoom), newImage: \(newImage)")
+            print("  - current scrollView.zoomScale: \(scrollView.zoomScale)")
+
+            baseZoomScale = baseScale
+            maxZoomScale = maxScale
+            self.minZoomScale = minZoomScale
+            scrollView.minimumZoomScale = minZoomScale
+            scrollView.maximumZoomScale = maxScale
+
+            let minRelative = minZoomScale / max(baseScale, 0.0001)
+            let currentRelative = max(parent.zoomScale, minRelative)
+            let targetScale: CGFloat
+            if resetZoom {
+                targetScale = baseScale
+            } else {
+                targetScale = max(minZoomScale, min(maxScale, currentRelative * baseScale))
+            }
+
+            print("  - targetScale: \(targetScale)")
+            print("  - minZoomScale: \(minZoomScale), maxScale: \(maxScale)")
+
+            // zoomScale을 먼저 설정한 후 contentSize 설정
+            if abs(scrollView.zoomScale - targetScale) > 0.01 || newImage {
+                print("  ⚠️ Setting zoomScale from \(scrollView.zoomScale) to \(targetScale)")
+                scrollView.zoomScale = targetScale
+            } else {
+                print("  ✓ ZoomScale already correct")
+            }
+
+            if newImage {
+                scrollView.contentSize = image.size
+            }
+
+            let normalizedScale = targetScale / baseScale
+            if abs(parent.zoomScale - normalizedScale) > 0.0001 {
+                parent.zoomScale = normalizedScale
+            }
+
+            let boundsChanged = scrollView.bounds.size != previousBoundsSize
+            let shouldResetPosition = resetZoom || newImage || boundsChanged || resetTrigger != lastResetTrigger
+
+            centerImage(in: scrollView, resetPosition: shouldResetPosition)
+            updateInteractionState(for: scrollView)
+
+            if resetZoom {
+                if parent.isInteracting {
+                    parent.isInteracting = false
+                }
+            }
+            return true
+        }
+
         @objc private func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
             guard let scrollView = gesture.view as? UIScrollView else { return }
             let location = gesture.location(in: imageView)
-            let boundedCenter = CGPoint(
-                x: max(0, min(location.x, imageView.bounds.width)),
-                y: max(0, min(location.y, imageView.bounds.height))
-            )
+            let boundedCenter = CGPoint(x: max(0, min(location.x, imageView.bounds.width)),
+                                        y: max(0, min(location.y, imageView.bounds.height)))
             let currentRelative = scrollView.zoomScale / max(baseZoomScale, 0.0001)
 
             if currentRelative > 1.01 {
@@ -410,23 +455,60 @@ private struct ZoomableScrollView: UIViewRepresentable {
             parent.onSingleTap(region)
         }
 
-        private func centerImage(in scrollView: UIScrollView) {
-            var frame = imageView.frame
+        private func centerImage(in scrollView: UIScrollView, resetPosition: Bool) {
             let boundsSize = scrollView.bounds.size
+            guard boundsSize.width > 0, boundsSize.height > 0 else { return }
 
-            if frame.size.width < boundsSize.width {
-                frame.origin.x = (boundsSize.width - frame.size.width) / 2
-            } else {
-                frame.origin.x = 0
+            let zoomScale = scrollView.zoomScale
+            guard let image = imageView.image else { return }
+            let imageSize = image.size
+
+            // imageView.frame의 크기가 잘못되어 있으면 수정
+            let expectedFrameSize = CGSize(width: imageSize.width * zoomScale,
+                                          height: imageSize.height * zoomScale)
+            if abs(imageView.frame.width - expectedFrameSize.width) > 1.0 ||
+               abs(imageView.frame.height - expectedFrameSize.height) > 1.0 {
+                print("⚠️ [Page \(parent.pageNumber)] Fixing imageView.frame from \(imageView.frame.size) to \(expectedFrameSize)")
+                imageView.frame.size = expectedFrameSize
             }
 
-            if frame.size.height < boundsSize.height {
-                frame.origin.y = (boundsSize.height - frame.size.height) / 2
-            } else {
-                frame.origin.y = 0
+            let displayWidth = imageSize.width * zoomScale
+            let displayHeight = imageSize.height * zoomScale
+
+            print("🖼️ [Page \(parent.pageNumber)] centerImage:")
+            print("  - scrollView.zoomScale: \(zoomScale)")
+            print("  - imageView.frame: \(imageView.frame)")
+            print("  - imageView.bounds: \(imageView.bounds)")
+            print("  - contentSize: \(scrollView.contentSize)")
+            print("  - displaySize: \(displayWidth) x \(displayHeight)")
+
+            let horizontalPadding = max(0, (boundsSize.width - displayWidth) / 2)
+            let verticalPadding = max(0, (boundsSize.height - displayHeight) / 2)
+
+            let centerHorizontally = false
+            let centerVertically = true
+
+            let insetLeft = centerHorizontally ? horizontalPadding : 0
+            let insetRight = centerHorizontally ? horizontalPadding : 0
+            let insetTop = centerVertically ? verticalPadding : 0
+            let insetBottom = centerVertically ? verticalPadding : 0
+
+            let targetInset = UIEdgeInsets(top: insetTop,
+                                           left: insetLeft,
+                                           bottom: insetBottom,
+                                           right: insetRight)
+
+            if scrollView.contentInset != targetInset {
+                scrollView.contentInset = targetInset
             }
 
-            imageView.frame = frame
+            if resetPosition && !parent.isInteracting {
+                let targetOffset = CGPoint(x: -insetLeft, y: -insetTop)
+                let currentOffset = scrollView.contentOffset
+                if abs(currentOffset.x - targetOffset.x) > 0.5 || abs(currentOffset.y - targetOffset.y) > 0.5 {
+                    scrollView.setContentOffset(targetOffset, animated: false)
+                }
+            }
         }
 
         private func zoomRect(for scrollView: UIScrollView, scale: CGFloat, center: CGPoint) -> CGRect {
@@ -444,10 +526,6 @@ private struct ZoomableScrollView: UIViewRepresentable {
             if parent.isInteracting != isZoomed {
                 parent.isInteracting = isZoomed
             }
-        }
-
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-            true
         }
     }
 }
