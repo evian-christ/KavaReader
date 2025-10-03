@@ -7,6 +7,19 @@ private enum ZoomTapRegion {
     case right
 }
 
+private struct FrameModifier: ViewModifier {
+    let scrollDirection: ScrollDirection
+    let image: UIImage?
+
+    func body(content: Content) -> some View {
+        if scrollDirection == .horizontal {
+            content.frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            content.aspectRatio(image != nil ? image!.size : CGSize(width: 1, height: 1), contentMode: .fit)
+        }
+    }
+}
+
 struct ZoomableImageView: View {
     // MARK: Internal
 
@@ -17,6 +30,8 @@ struct ZoomableImageView: View {
     let onTap: () -> Void
     let onPageChange: (Int) -> Void
     let onInteractionChange: (Bool) -> Void
+
+    @StateObject private var readerSettings = ReaderSettings.shared
 
     var body: some View {
         GeometryReader { geometry in
@@ -33,12 +48,14 @@ struct ZoomableImageView: View {
                                        tapZoneWidth: tapZoneWidth,
                                        resetTrigger: resetToken,
                                        pageFitMode: pageFitMode,
+                                       containerSize: geometry.size,
                                        onSingleTap: handleSingleTap)
                         .transition(.opacity)
                 } else if isLoading {
                     ProgressView()
                         .progressViewStyle(.circular)
                         .tint(.white)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let error = loadError {
                     VStack(spacing: 12) {
                         Image(systemName: "exclamationmark.triangle.fill")
@@ -63,11 +80,13 @@ struct ZoomableImageView: View {
                                 .cornerRadius(8)
                         }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(24)
                 } else {
                     ProgressView()
                         .progressViewStyle(.circular)
                         .tint(.white)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
 
                 // 로딩 중에도 탭 제스처를 받을 수 있도록 투명 오버레이 추가
@@ -97,6 +116,7 @@ struct ZoomableImageView: View {
                 await loadImage()
             }
         }
+        .modifier(FrameModifier(scrollDirection: readerSettings.scrollDirection, image: displayedImage))
     }
 
     // MARK: Private
@@ -181,6 +201,7 @@ private struct ZoomableScrollView: UIViewRepresentable {
     let tapZoneWidth: CGFloat
     let resetTrigger: Int
     let pageFitMode: PageFitMode
+    let containerSize: CGSize
     let onSingleTap: (ZoomTapRegion) -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -485,13 +506,16 @@ private struct ZoomableScrollView: UIViewRepresentable {
             let horizontalPadding = max(0, (boundsSize.width - displayWidth) / 2)
             let verticalPadding = max(0, (boundsSize.height - displayHeight) / 2)
 
-            let centerHorizontally = false
-            let centerVertically = true
+            // 줌 상태에 따라 정렬 방식 결정
+            // 줌인 상태(이미지가 화면보다 큼)면 패딩 없이 화면 100% 사용
+            // 줌 아웃 상태(이미지가 화면보다 작음)면 가로/세로 중앙 정렬
+            let isZoomedIn = displayWidth > boundsSize.width || displayHeight > boundsSize.height
 
-            let insetLeft = centerHorizontally ? horizontalPadding : 0
-            let insetRight = centerHorizontally ? horizontalPadding : 0
-            let insetTop = centerVertically ? verticalPadding : 0
-            let insetBottom = centerVertically ? verticalPadding : 0
+            // 가로/세로 모두: 줌인 시 패딩 없음, 아니면 중앙 정렬
+            let insetLeft = isZoomedIn ? 0 : horizontalPadding
+            let insetRight = isZoomedIn ? 0 : horizontalPadding
+            let insetTop = isZoomedIn ? 0 : verticalPadding
+            let insetBottom = isZoomedIn ? 0 : verticalPadding
 
             let targetInset = UIEdgeInsets(top: insetTop,
                                            left: insetLeft,
