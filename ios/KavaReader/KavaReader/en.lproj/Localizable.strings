@@ -1,0 +1,568 @@
+"Kavita에 저장된 이 작품의 읽기 진행률이 초기화됩니다." = "This will reset this series' reading progress in Kavita.";
+"Kavita 서버 연결 및 API 키 인증에 성공했습니다." = "Connected to the Kavita server and authenticated the API key successfully.";
+"검색 결과가 없습니다." = "No search results.";
+"계속 읽기" = "Continue";
+"계정" = "Account";
+"기록 없음" = "No updates yet";
+"기기 위치로 열기" = "Open at Device Position";
+"네트워크 연결에 문제가 있습니다. 인터넷 연결을 확인해주세요." = "There is a network problem. Check your internet connection.";
+"다시 시도" = "Try Again";
+"다음 권으로 이동할까요?" = "Go to the next volume?";
+"닫기" = "Close";
+"더 보기" = "See More";
+"라이브러리" = "Library";
+"라이브러리 데이터를 읽는 중 문제가 발생했습니다." = "There was a problem loading the library.";
+"로그인" = "Log In";
+"로그인 성공: CSRF 폼 플로우를 통해 인증되었습니다." = "Login successful. Authenticated through the CSRF form flow.";
+"로그인 성공: 세션 쿠키 저장 및 인증 확인 완료." = "Login successful. Session cookie saved and authentication verified.";
+"로그인 응답은 JSON이지만 인증 토큰을 찾지 못했습니다. Kavita 사용자 설정에서 Auth Key를 입력해 주세요." = "The login response was JSON, but no authentication token was found. Enter an Auth Key in Kavita user settings.";
+"만화 및 소설 서버" = "Comics and novels server";
+"목록" = "Catalog";
+"목록 캐시 삭제" = "Clear Catalog Cache";
+"목록으로 돌아가기" = "Back to Library";
+"목록은 갱신됐지만 이전 표지를 삭제하지 못했습니다." = "The catalog was refreshed, but old covers could not be removed.";
+"버전" = "Version";
+"비밀번호" = "Password";
+"사용자명" = "Username";
+"서버" = "Server";
+"서버 URL" = "Server URL";
+"서버 설정" = "Server Settings";
+"서버 설정을 확인한 뒤 다시 시도해 주세요." = "Check the server settings and try again.";
+"서버 설정을 확인해 주세요." = "Check the server settings.";
+"서버 위치로 열기" = "Open at Server Position";
+"서버 유형" = "Server Type";
+"서버 응답 형식이 올바르지 않습니다." = "The server response is invalid.";
+"서버 응답에 인증 토큰이 없습니다." = "The server response has no authentication token.";
+"서버 주소가 올바르지 않습니다." = "The server address is invalid.";
+"서버를 찾을 수 없습니다" = "Server not found.";
+"서버에 문제가 발생했습니다. 잠시 후 다시 시도해주세요." = "There is a server problem. Try again later.";
+"서버에 성공적으로 연결되었습니다" = "Connected to the server successfully.";
+"서버에 연결할 수 없습니다" = "Cannot connect to the server.";
+"서버에 연결할 수 없습니다. 서버 상태를 확인해주세요." = "Cannot connect to the server. Check its status.";
+"서버에 표시할 작품이 없습니다." = "There are no series to display on the server.";
+"서버에는 연결됐지만 API 키 인증에 실패했습니다." = "Connected to the server, but API key authentication failed.";
+"서버에서 데이터를 받지 못했습니다." = "No data was received from the server.";
+"서버에서 이 작품을 찾을 수 없거나 접근할 수 없습니다. 설정의 서버 설정에서 라이브러리를 업데이트해 주세요." = "This series could not be found or accessed on the server. Update the library in Settings > Server Settings.";
+"서버에서 읽기 위치를 확인할 수 없습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요." = "The reading position could not be checked on the server. Check the connection and try again.";
+"서버에서 읽기 위치를 확인할 수 없습니다. 저장된 위치로 열면 이번 읽기의 진행률은 서버에 자동 전송되지 않습니다." = "The reading position could not be checked on the server. If you open the saved position, this reading progress will not be sent automatically.";
+"서버와 이 기기에 저장된 읽기 위치가 다릅니다. 기기 위치로 열면 이번 읽기의 진행률은 서버에 자동 전송되지 않습니다." = "The server and this device have different reading positions. If you open the device position, this reading progress will not be sent automatically.";
+"서버의 읽기 위치에 해당하는 챕터를 목록에서 찾지 못했습니다. 챕터 목록을 새로고침해 주세요." = "The chapter at the server's reading position was not found. Refresh the chapter list.";
+"라이브러리·챕터 목록 캐시" = "Library and Chapter Cache";
+"라이브러리 업데이트" = "Update Library";
+"라이브러리 업데이트 중" = "Updating library";
+"라이브러리와 챕터 목록을 함께 저장합니다. 캐시를 끄면 다음부터 서버에서 다시 받고, 기존 저장본은 삭제하기 전까지 유지됩니다." = "Save the library and chapter lists on this device. If disabled, future lists come from the server. Existing copies remain until deleted.";
+"선택한 읽기 방향은 모든 작품에 기본으로 적용됩니다." = "The selected reading direction applies to all series by default.";
+"설정" = "Settings";
+"검색" = "Search";
+"제목 또는 작가 검색" = "Search titles or authors";
+"제목이나 작가를 검색하세요." = "Search by title or author.";
+"전체 결과" = "All Results";
+"세로 스크롤" = "Vertical Scroll";
+"시리즈 ID를 찾을 수 없습니다" = "Series ID not found.";
+"시리즈 정보를 불러오는 중" = "Loading series information";
+"안 읽음으로 표시" = "Mark as Unread";
+"알 수 없는 응답 형식입니다" = "Unknown response format.";
+"앱 정보" = "About";
+"언어" = "Language";
+"연결 시간이 초과되었습니다" = "Connection timed out.";
+"연결 테스트" = "Test Connection";
+"오른쪽 → 왼쪽" = "Right to Left";
+"오른쪽으로 넘기면 다음 페이지" = "Swipe right for the next page";
+"올바른 URL 형식을 입력해주세요" = "Enter a valid URL.";
+"왼쪽 → 오른쪽" = "Left to Right";
+"왼쪽으로 넘기면 다음 페이지" = "Swipe left for the next page";
+"요청 시간이 초과되었습니다. 다시 시도해주세요." = "The request timed out. Try again.";
+"요청한 리소스를 찾을 수 없습니다." = "The requested resource was not found.";
+"웹툰 스타일 (위아래로 스크롤)" = "Webtoon style (scroll vertically)";
+"유효하지 않은 URL입니다" = "Invalid URL.";
+"유효하지 않은 서버 URL입니다." = "Invalid server URL.";
+"이 작품을 열 수 없습니다." = "This series cannot be opened.";
+"이 작품의 모든 챕터를 안 읽음으로 표시할까요?" = "Mark all chapters in this series as unread?";
+"이 작품이나 화를 서버에서 찾을 수 없거나 접근할 수 없습니다. 설정의 서버 설정에서 라이브러리를 업데이트해 주세요." = "This series or chapter could not be found or accessed on the server. Update the library in Settings > Server Settings.";
+"이동" = "Go";
+"이미지를 불러오지 못했어요." = "Could not load the image.";
+"이어서 읽기" = "Continue Reading";
+"이전 권으로 이동할까요?" = "Go to the previous volume?";
+"인증에 실패했습니다. API 키를 확인해주세요." = "Authentication failed. Check the API key.";
+"인터넷 연결을 확인해주세요" = "Check your internet connection.";
+"읽기" = "Read";
+"읽기 방향" = "Reading Direction";
+"읽기 방향: %@" = "Reading direction: %@";
+"페이지 색으로 여백 채우기" = "Fill margins with page colors";
+"가장자리 탭으로 페이지 넘기기" = "Turn pages by tapping edges";
+"만화별 설정이 없는 작품에 적용됩니다." = "Applies to series without their own reading settings.";
+"설정 범위" = "Settings Scope";
+"글로벌" = "Global";
+"이 만화" = "This Series";
+"표시 방식" = "Display Mode";
+"한 페이지" = "Single Page";
+"두 페이지" = "Two Pages";
+"읽기 상태 변경 실패" = "Could Not Change Reading Status";
+"읽기 상태 변경 중" = "Changing reading status";
+"읽기 설정" = "Reading Settings";
+"읽기 시작" = "Start Reading";
+"읽기 위치 확인" = "Check Reading Position";
+"읽기 위치가 다릅니다" = "Reading Positions Differ";
+"읽는 중" = "Reading";
+"읽기 화면 여는 중" = "Opening reader";
+"읽음" = "Read";
+"읽음으로 표시" = "Mark as Read";
+"작가, 제목, 태그 검색" = "Search author, title, or tag";
+"작품 목록 새로고침" = "Refresh series list";
+"작품 읽기 옵션" = "Series reading options";
+"작품에서 하트를 누르면 여기에 표시됩니다." = "Tap the heart on a series to see it here.";
+"저장된 위치로 열기" = "Open at Saved Position";
+"저장된 작품 목록이 없습니다. 설정의 서버 설정에서 라이브러리를 업데이트해 주세요." = "No saved series. Update the library in Settings > Server Settings.";
+"저장된 크기" = "Stored Size";
+"최근 업데이트:" = "Last updated:";
+"접근 권한이 없습니다." = "Access denied.";
+"즐겨찾기 변경 실패" = "Could Not Change Favorites";
+"즐겨찾기 변경 중" = "Updating favorites";
+"즐겨찾기에 추가" = "Add to Favorites";
+"즐겨찾기에서 제거" = "Remove from Favorites";
+"즐겨찾기 상태를 확인하지 못했습니다. 다시 시도" = "Could not check favorite status. Try again";
+"챕터" = "Chapters";
+"챕터 목록 새로고침" = "Refresh chapter list";
+"취소" = "Cancel";
+"캐시 삭제 실패" = "Could Not Clear Cache";
+"캐시 설정" = "Cache Settings";
+"캐시를 끄면 다음부터 커버를 서버에서 다시 받습니다. 기존 이미지는 삭제하기 전까지 유지됩니다." = "If disabled, future covers come from the server. Existing images remain until deleted.";
+"커버 이미지" = "Cover Images";
+"커버 이미지 캐시" = "Cover Image Cache";
+"커버 캐시 삭제" = "Clear Cover Cache";
+"쿠키 수신했으나 인증 확인 실패" = "Cookie received, but authentication verification failed.";
+"토큰을 받아 Keychain에 저장했습니다. 실제 Kavita API 접근 권한은 아직 확인되지 않았습니다." = "The token was saved to Keychain. Kavita API access has not yet been verified.";
+"페이지 목록 접기" = "Collapse page list";
+"페이지 목록 펼치기" = "Expand page list";
+"페이지 선택기" = "Page picker";
+"표시할 작품이 없습니다." = "No series to display.";
+"확인" = "OK";
+"Favourite" = "Favorites";
+"Specials" = "Specials";
+"%d / %d 페이지" = "%d / %d pages";
+"%d페이지" = "%d pages";
+"%d편" = "%d specials";
+"%d화" = "%d chapters";
+"페이지 %d, 전체 %d페이지" = "Page %d of %d";
+"페이지 %d" = "Page %d";
+"서버 응답 오류 (상태 코드: %d)" = "Server response error (status code: %d)";
+"네트워크 오류: %@" = "Network error: %@";
+"연결 실패: %@" = "Connection failed: %@";
+"로그인 실패: %@" = "Login failed: %@";
+"인증 요청 실패 (상태 코드: %d)" = "Authentication request failed (status code: %d)";
+"인증 토큰 검증 실패 (상태 코드: %d)" = "Authentication token verification failed (status code: %d)";
+"서버 연결 실패: %@" = "Server connection failed: %@";
+"목록은 갱신됐지만 기기에 저장하지 못했습니다: %@" = "The catalog was refreshed but could not be saved on this device: %@";
+"챕터 목록은 표시했지만 기기에 저장하지 못했습니다: %@" = "The chapter list was displayed but could not be saved on this device: %@";
+"지원하지 않는 URL 스킴입니다. (입력 값: %@, http 또는 https 사용)" = "Unsupported URL scheme (%@). Use http or https.";
+"이미지를 불러올 수 없습니다: %@" = "Could not load image: %@";
+"라이브러리+" = "Library+";
+"카비타 정보 새로고침" = "Refresh Kavita metadata";
+"카비타 정보 확인 중 · %d / %d" = "Checking Kavita metadata · %d / %d";
+"카비타에 저장된 장르와 태그로 구성했습니다." = "Organized using genres and tags stored in Kavita.";
+"· %d개 조회 실패" = "· %d lookups failed";
+"최근 추가된 작품" = "Recently added";
+"장르 정보가 없는 작품" = "Series without genre information";
+"전체 작품" = "All series";
+"태그" = "Tag";
+"작품 목록이 없습니다." = "No series found.";
+"서버 설정에서 라이브러리를 업데이트해 주세요." = "Update the library in Server Settings.";
+"오늘의 발견" = "Today's pick";
+"작품 보기" = "View series";
+"미완독 작품을 우선해 매일 골라요." = "A daily selection, prioritizing unfinished series.";
+"오늘 시작해 볼 작품" = "Start something today";
+"완독한 작품" = "Completed series";
+"장르 정보가 없어 읽기 상태와 추가 순서로 구성했습니다." = "No genre information found. Organized by reading state and when series were added.";
+"카비타 장르·태그가 없는 작품의 제목만 AniList에서 검색합니다." = "Only titles missing Kavita genres and tags are searched on AniList.";
+"AniList에서 작품 확인 중 · %d개 검색" = "Checking AniList · %d titles searched";
+"AniList 요청 제한에 도달했습니다. 나중에 다시 확인합니다." = "AniList rate limit reached. Try again later.";
+"일치하는 장르 정보가 없어 읽기 상태로 구성했습니다." = "No matching genre information found. Organized by reading state.";
+"카비타 정보를 우선하고 부족한 분류는 AniList로 보완했습니다." = "Kavita metadata takes priority; AniList fills missing categories.";
+"분류 출처: AniList" = "Categories: AniList";
+"취향에 맞는 작품" = "Based on your reading";
+"읽는 작품과 공통 주제를 우선해 골라요." = "Prioritizing themes shared with your reading.";
+"작품 정보" = "Series Information";
+"기본 정보" = "Basic Information";
+"제목" = "Title";
+"서재" = "Library";
+"작품 ID" = "Series ID";
+"줄거리" = "Summary";
+"장르" = "Genres";
+"태그" = "Tags";
+"정보 없음" = "No information";
+"출처: %@" = "Source: %@";
+"외부 정보" = "External Information";
+"일치한 작품" = "Matched Series";
+"AniList에서 보기" = "View on AniList";
+"확인된 AniList 일치 정보가 없습니다." = "No verified AniList match is available.";
+"추천 분류에는 Kavita 장르·태그가 우선 적용됩니다." = "Kavita genres and tags take priority in recommendations.";
+"카비타 정보 확인 중" = "Checking Kavita metadata";
+"카비타 메타데이터를 확인하지 못했습니다." = "Could not load Kavita metadata.";
+"카비타 연결에 실패해 저장된 정보만 표시합니다." = "Could not connect to Kavita. Showing saved information only.";
+"서버 요청이 실패했습니다. (코드: %d)" = "Server request failed (code: %d)";
+"요청 인코딩 오류: %@" = "Request encoding error: %@";
+"%@: 성공 응답에 토큰이나 쿠키가 없습니다." = "%@: successful response contained no token or cookie.";
+"%@: 상태 코드 %d" = "%@: status code %d";
+"찜한 작품" = "Saved for later";
+"새로 추가된 작품" = "Newly added";
+"새로운 장르 탐색" = "Explore new genres";
+"이 작품이 마음에 들었다면" = "If you enjoyed this";
+"읽으신 %@ 기반 추천" = "Because you read %@";
+"다른 세계로 떠나는 모험" = "Adventures in other worlds";
+"먼치킨" = "Overpowered protagonists";
+"한 수 앞을 읽는 두뇌전" = "A battle of wits";
+"단서를 따라가는 미스터리" = "Follow the clues";
+"긴장감 넘치는 생존 이야기" = "Stories of survival";
+"설레는 로맨스" = "Heart-fluttering romance";
+"웃음과 설렘 사이" = "Love and laughter";
+"학교 이야기" = "School stories";
+"편안한 일상물" = "Comforting everyday stories";
+"한바탕 웃고 싶을 때" = "For a good laugh";
+"승부에 빠져드는 순간" = "The thrill of competition";
+"미래와 기술을 상상하다" = "Imagining the future";
+"서늘한 이야기" = "Chilling stories";
+"맛있는 만화" = "Delicious manga";
+"조회 중" = "Loading";
+"대기" = "Idle";
+"AniList 검색 · %d개" = "AniList searches · %d";
+"남은 검색 · %d개" = "Remaining searches · %d";
+"조회 결과는 다음 추천 구성에 반영됩니다." = "Results will be used in the next recommendation snapshot.";
+
+"읽기 중단" = "Not reading anymore";
+"읽기 기록 초기화" = "Reset reading progress";
+"읽기 기록을 초기화할까요?" = "Reset reading progress?";
+"이 작품의 모든 권과 챕터의 읽기 진행률 및 저장된 읽기 위치가 초기화됩니다." = "This resets the reading progress and saved reading position for every volume and chapter in this series.";
+
+"홈" = "Home";
+"회귀와 두 번째 기회" = "Second chances and time resets";
+"새로운 삶, 환생" = "A new life through reincarnation";
+"복수의 시작" = "Revenge begins";
+"던전과 공략" = "Dungeons and quests";
+"게임 속 세계" = "Inside a game world";
+"마법과 마술" = "Magic and sorcery";
+"무림과 무협" = "Martial worlds";
+"검과 검술" = "Swords and swordplay";
+"역사 속 이야기" = "Stories from history";
+"직장 이야기" = "Workplace stories";
+"음악과 무대" = "Music and the stage";
+"예술과 창작" = "Art and creation";
+"가족 이야기" = "Family stories";
+"동물과 함께" = "Life with animals";
+"여행과 방랑" = "Travel and wandering";
+"라이벌과 경쟁" = "Rivals and competition";
+"팀으로 성장하는 이야기" = "Growing as a team";
+"악역의 시선" = "A villain’s perspective";
+"정치와 권력" = "Politics and power";
+"인간과 다른 존재들" = "Beyond human";
+
+"읽기 상태" = "Reading status";
+
+"모든 상태" = "All statuses";
+
+"읽지 않음" = "Unread";
+
+"완독" = "Completed";
+
+"완료" = "Done";
+
+"선택" = "Select";
+
+"정렬" = "Sort";
+
+"제목 오름차순" = "Title ascending";
+
+"제목 내림차순" = "Title descending";
+
+"처리 중…" = "Processing…";
+
+"선택한 즐겨찾기 해제" = "Remove selected favourites";
+
+"즐겨찾기 해제 실패" = "Could not remove favourites";
+
+"필터" = "Filter";
+
+"장르 둘러보기" = "Browse by genre";
+
+"판타지" = "Fantasy";
+
+"액션" = "Action";
+
+"로맨스" = "Romance";
+
+"코미디" = "Comedy";
+
+"일상" = "Slice of life";
+
+"미스터리" = "Mystery";
+
+"모험" = "Adventure";
+
+"SF" = "Sci-fi";
+
+"스포츠" = "Sports";
+
+"공포" = "Horror";
+
+"인덱싱 중…" = "Indexing…";
+
+"작품의 장르와 태그 정보를 정리해 장르별 탐색과 취향에 맞는 추천을 준비하고 있어요." = "Organizing genre and tag information for genre browsing and personalized recommendations.";
+
+"장르 없음" = "No genre";
+"세부 정보" = "Details";
+
+"첫 페이지 단독 표시" = "Show First Page Separately";
+
+// AniList user connections
+"AniList 요청 제한에 도달했습니다. 잠시 후 다시 검색해 주세요." = "AniList rate limit reached. Please try again shortly.";
+"AniList 검색에 실패했습니다. 연결 상태를 확인하고 다시 시도해 주세요." = "AniList search failed. Check your connection and try again.";
+"제목이나 원제로 검색한 뒤 연결할 작품을 선택하세요." = "Search by title or original title, then select the work to link.";
+"AniList 검색어" = "Search AniList";
+"검색 결과: %@" = "Results for: %@";
+"검색 결과가 없습니다. 원제나 다른 제목으로 검색해 보세요." = "No results. Try the original title or another title.";
+"AniList 검색 중" = "Searching AniList";
+"결과 더 보기" = "Load more results";
+"AniList 작품 연결" = "Link an AniList work";
+"만화" = "Manga";
+"단편" = "One-shot";
+"내 작품" = "Your work";
+"분류 정보가 없는 작품입니다. 연결은 저장할 수 있습니다." = "This work has no categories. You can still save the link.";
+"분류는 Kavita 정보를 우선 사용합니다." = "Kavita categories take priority.";
+"선택한 작품의 분류를 장르 탐색과 추천에 사용합니다." = "The selected work's categories will be used for genre browsing and recommendations.";
+"연결은 이 기기에 저장됩니다." = "This link is saved on this device.";
+"이 작품에 연결" = "Link this work";
+"연결 확인" = "Confirm link";
+"연결을 저장하지 못했습니다. 다시 시도해 주세요." = "Couldn't save the link. Please try again.";
+"외부 메타데이터" = "External metadata";
+"사용자가 연결한 작품" = "Linked by you";
+"자동으로 연결된 작품" = "Automatically linked";
+"이 작품의 자동 연결이 중지되었습니다." = "Automatic linking is disabled for this work.";
+"연결된 AniList 작품이 없습니다." = "No AniList work is linked.";
+"연결 정보 새로고침" = "Refresh linked metadata";
+"작품 연결" = "Link a work";
+"연결 변경" = "Change link";
+"연결 해제" = "Unlink";
+"자동 연결 사용" = "Use automatic linking";
+"연결 정보를 갱신하지 못했습니다. 저장된 연결은 유지됩니다." = "Couldn't refresh the metadata. Your saved link is kept.";
+
+"연결할 작품을 검색하세요." = "Search for a work to link.";
+
+"일반 설정" = "General Settings";
+"한 줄당 작품 수" = "Items per row";
+"만화 상세" = "Manga details";
+"홈의 추천 및 이어서 읽기, 라이브러리, 만화 상세의 권·챕터·스페셜 목록에 각각 적용됩니다." = "Applies separately to recommendations and continue reading on Home, the Library, and volume, chapter, and special lists in manga details.";
+"홈의 추천 및 이어서 읽기와 라이브러리에 각각 적용됩니다." = "Applies separately to recommendations and continue reading on Home, and to the Library.";
+"이름순 오름차순" = "Name ascending";
+"이름순 내림차순" = "Name descending";
+"랜덤" = "Random";
+
+"파일" = "Files";
+"만화 추가" = "Add comics";
+"파일 가져오기" = "Import files";
+"폴더 가져오기" = "Import folder";
+"CBZ·ZIP 파일을 기기에 복사합니다. 폴더를 선택하면 하위 폴더도 가져옵니다." = "CBZ and ZIP files are copied to this device. Importing a folder includes its subfolders.";
+"파일 목록을 확인하는 중…" = "Finding comic files…";
+"%d / %d · %@" = "%d / %d · %@";
+"%d개 추가 · %d개 중복 건너뜀" = "%d imported · %d duplicates skipped";
+"가져오기를 중단했습니다. 완료된 파일은 유지됩니다." = "Import stopped. Completed files are kept.";
+"가져오기 결과" = "Import result";
+"중단" = "Stop";
+"권 추가" = "Add volumes";
+"파일 관리" = "Manage files";
+"작품 이름" = "Series title";
+"이름 저장" = "Save title";
+"권 목록" = "Volumes";
+"%d권" = "%d volumes";
+"작품 합치기" = "Merge series";
+"합칠 작품" = "Destination series";
+"작품 선택" = "Select a series";
+"선택한 작품으로 권 이동" = "Move volumes to selected series";
+"기기에서 작품 삭제" = "Delete series from device";
+"가져온 원본 파일은 삭제하지 않습니다." = "The original imported files are kept.";
+"기기에 보관한 작품과 읽기 기록을 삭제할까요?" = "Delete the stored series and its reading history?";
+"완독으로 표시" = "Mark as completed";
+"오늘 골라볼 만화" = "Comics to explore today";
+"손상된 만화 파일입니다." = "This comic archive is damaged.";
+"암호화 또는 ZIP64 압축은 지원하지 않습니다." = "Encrypted and ZIP64 archives are not supported.";
+"페이지 이미지가 너무 큽니다." = "The page image is too large.";
+"압축 파일에 읽을 수 있는 이미지가 없습니다." = "The archive contains no readable images.";
+
+"기기에 보관: %@" = "Stored on device: %@";
+
+"작품을 길게 눌러 관리할 수 있습니다." = "Touch and hold a series to manage it.";
+
+"CBZ·ZIP·EPUB 파일을 기기에 복사합니다. 폴더를 선택하면 하위 폴더도 가져옵니다." = "CBZ, ZIP and EPUB files are copied to this device. Importing a folder includes its subfolders.";
+
+"EPUB 본문 구조를 읽을 수 없습니다." = "The EPUB reading structure could not be read.";
+
+"암호화된 EPUB은 지원하지 않습니다." = "Encrypted EPUB files are not supported.";
+
+"EPUB 내부 파일 경로가 올바르지 않습니다." = "The EPUB contains an invalid resource path.";
+
+"EPUB을 불러오는 중" = "Loading EPUB";
+
+"이전 본문" = "Previous section";
+
+"다음 본문" = "Next section";
+
+"본문 %d / %d" = "Section %d / %d";
+
+"본문 목록" = "Reading sections";
+
+"EPUB 읽기 설정" = "EPUB reading settings";
+
+"%d%% 읽음" = "%d%% read";
+
+// Imported-file metadata
+"파일 내장 정보" = "Embedded file metadata";
+"파일 정보 확인 중" = "Reading file metadata";
+"파일 정보를 읽지 못해 저장된 정보만 표시합니다." = "Could not read file metadata. Showing saved information only.";
+"파일에 내장된 메타데이터가 없습니다." = "This file has no embedded metadata.";
+"분류는 파일 내장 정보를 우선 사용합니다." = "Categories from the file take priority.";
+"소설" = "Novel";
+"분류는 직접 연결한 AniList 정보를 우선 사용합니다." = "Categories from your manually linked AniList work take priority.";
+
+// Development error preview
+
+// Theme settings
+"테마 설정" = "Theme settings";
+"깊은 숲" = "Deep Forest";
+"고요한 밤" = "Quiet Midnight";
+"자두빛 저녁" = "Plum Dusk";
+"따뜻한 모카" = "Warm Mocha";
+"흑연" = "Graphite";
+"메인색" = "Main";
+"강조색" = "Accent";
+"버튼색" = "Button";
+"글씨색" = "Text";
+
+"테마" = "Theme";
+
+// Home empty state
+"서버 연결하기" = "Connect to a server";
+"첫 작품을 추가해 보세요" = "Add your first title";
+"기기의 파일을 가져오거나 Kavita 서버를 연결해 읽을 수 있어요." = "Import files from your device or connect to a Kavita server to start reading.";
+"작품 목록을 불러오고 있어요" = "Loading your library";
+"잠시만 기다려 주세요." = "Please wait a moment.";
+"라이브러리를 확인해 주세요" = "Check your library";
+"서버 설정에서 연결 상태를 확인하고 라이브러리를 다시 업데이트해 주세요." = "Check your connection in Server Settings and update the library again.";
+"서버의 작품 목록을 불러오세요" = "Load titles from your server";
+"서버 설정에서 라이브러리를 업데이트하거나 기기의 파일을 가져올 수 있어요." = "Update the library in Server Settings or import files from your device.";
+"서버에서 작품을 찾지 못했어요" = "No titles found on your server";
+"서버에 작품을 추가한 뒤 라이브러리를 업데이트하거나 기기의 파일을 가져와 주세요." = "Add titles to your server and update the library, or import files from your device.";
+"홈을 준비하고 있어요" = "Preparing your home";
+
+// Additional theme presets
+"퓨어 블랙" = "Pure Black";
+"클래식 화이트" = "Classic White";
+"깊은 바다" = "Deep Ocean";
+"크림 페이퍼" = "Cream Paper";
+
+"파일 도움말" = "File help";
+
+// Privacy and terms
+"개인정보" = "Privacy";
+"개인정보 처리방침" = "Privacy Policy";
+"이용약관" = "Terms of Use";
+"기기에 저장되는 정보" = "Information stored on your device";
+"Kava는 읽기 기능을 제공하기 위해 서버 주소, 입력한 계정 정보와 API Key, 앱 설정, 읽기 기록, 즐겨찾기, 작품 정보와 캐시를 기기에 저장합니다. 직접 가져온 파일은 앱 내부에 복사해 오프라인 읽기에 사용합니다. 인증 토큰은 기기의 Keychain에 저장합니다." = "Kava stores your server address, entered account details and API Key, app settings, reading history, favorites, title information and caches on your device to provide reading features. Imported files are copied into the app for offline reading. Authentication tokens are stored in the device Keychain.";
+"Kavita 서버 연결" = "Connecting to Kavita";
+"서버를 연결하면 인증 정보와 작품 조회, 읽기 진행률, 즐겨찾기 등의 요청을 사용자가 지정한 Kavita 서버로 직접 전송합니다. 서버에 저장되는 정보의 처리와 보관은 해당 서버 운영자의 정책을 따릅니다." = "When you connect a server, authentication information and requests for titles, reading progress and favorites are sent directly to the Kavita server you specify. Information stored on that server is handled and retained according to its operator’s policies.";
+"외부 작품 정보" = "External title information";
+"자동 작품 정보 보완 또는 직접 AniList 연결을 사용할 때 작품 제목이나 AniList 작품 ID를 AniList에 전송하고 작품 정보와 표지 이미지를 받아옵니다. 네트워크 요청 과정에서 해당 서비스에 IP 주소 등의 접속 정보가 전달될 수 있습니다. 가져온 파일의 본문이나 Kavita 인증 정보를 AniList로 전송하지 않습니다." = "When automatic metadata lookup or manual AniList linking is used, title names or AniList title IDs are sent to AniList to retrieve metadata and cover images. Network requests may also disclose connection information such as your IP address to that service. Imported file contents and Kavita credentials are not sent to AniList.";
+"정보의 사용 목적" = "How information is used";
+"저장된 정보는 서버 인증, 라이브러리 표시, 작품 정보 보완, 읽기 위치 복원과 앱 설정 유지에 사용합니다. Kava는 별도의 개발자 서버로 읽기 기록이나 가져온 파일을 전송하지 않으며, 광고 또는 사용 분석 SDK를 포함하지 않습니다." = "Stored information is used for server authentication, library display, metadata lookup, restoring your reading position and retaining app settings. Kava does not send reading history or imported files to a separate developer-operated server and does not include advertising or usage analytics SDKs.";
+"정보 보관 및 삭제" = "Retention and deletion";
+"기기에 저장한 정보는 앱 기능을 위해 보관합니다. 가져온 파일은 작품의 파일 관리에서 삭제할 수 있고, 커버 캐시는 설정의 캐시 설정에서 삭제할 수 있습니다. 서버 설정에서 저장된 연결 정보를 수정할 수 있습니다. 기기의 데이터를 삭제해도 Kavita 서버에 저장된 기록은 삭제되지 않으므로 서버의 정보 삭제는 서버 운영자에게 요청해야 합니다." = "Information is retained on your device to support app features. You can delete imported files through a title’s file management menu and clear cover images in Cache Settings. Saved connection details can be edited in Server Settings. Deleting device data does not delete records stored on your Kavita server; contact the server operator to request deletion of server data.";
+"외부 서비스 및 백업" = "External services and backups";
+"Kavita 서버와 AniList 등 외부 서비스에는 각 서비스의 개인정보 처리방침이 적용됩니다. 기기 백업을 사용하는 경우 앱의 로컬 데이터가 운영체제의 백업 설정에 따라 백업에 포함될 수 있습니다." = "External services, including your Kavita server and AniList, are governed by their own privacy policies. If you use device backups, local app data may be included according to your operating system’s backup settings.";
+
+// Support form
+"고객지원" = "Support";
+"이메일" = "Email";
+"내용" = "Message";
+"이메일 주소" = "Email address";
+"답변받을 이메일 주소를 입력해 주세요." = "Enter the email address where you would like to receive a reply.";
+"문의 내용" = "Support message";
+"제출" = "Submit";
+"문의 이메일" = "Support email";
+"Kava 고객지원 문의" = "Kava support request";
+"회신 이메일: %@" = "Reply email: %@";
+"문의 내용을 입력해 주세요." = "Enter your message here.";
+"문의 전송 안내" = "Support request";
+"메일을 보내지 못했습니다. 입력한 내용은 유지됩니다. 다시 시도해 주세요." = "Unable to send the email. Your entries have been kept. Please try again.";
+"메일 작성창을 열 수 없습니다. 메일 앱을 설정하거나 문의 이메일로 직접 보내 주세요." = "Unable to open a mail composer. Set up a mail app or send your message directly to the support email address.";
+"제출하면 메일 작성창이 열립니다. 작성창에서 전송을 눌러 문의를 보내 주세요." = "Submitting opens a mail composer. Tap Send there to send your request.";
+"고객지원 문의" = "Support requests";
+"고객지원에서 입력한 이메일과 문의 내용은 사용자가 메일 작성창에서 전송할 때 kavareader@gmail.com으로 전달됩니다. 문의 정보는 답변과 문제 해결을 위해 사용합니다. 메일 전송에는 사용자가 선택한 메일 서비스와 수신자의 Gmail 서비스가 사용됩니다. 개인정보 관련 문의와 문의 정보 삭제 요청도 이 주소로 보낼 수 있습니다." = "The email address and message entered in Support are sent to kavareader@gmail.com when you send them from the mail composer. This information is used to reply and resolve issues. Sending mail involves your selected email service and the recipient’s Gmail service. You can also use this address for privacy questions and requests to delete support correspondence.";
+"OPDS" = "OPDS";
+"OPDS 주소" = "OPDS URL";
+"OPDS 주소로 연결" = "Connect with OPDS URL";
+"Kavita의 사용자 설정 → 외부 클라이언트에서 OPDS 주소를 복사해 붙여넣으세요. 서버 URL과 API Key가 자동으로 입력됩니다." = "Copy and paste the OPDS URL from Kavita's User Settings → 3rd Party Clients. The server URL and API Key will be filled in automatically.";
+"올바른 Kavita OPDS 주소를 입력해주세요. 주소에 /api/opds/와 인증 키가 포함되어야 합니다." = "Enter a valid Kavita OPDS URL containing /api/opds/ and an authentication key.";
+"연결 정보 입력 방식" = "Connection Setup";
+"직접 입력" = "Manual Entry";
+"OPDS 주소 하나를 붙여넣어 연결합니다. 서버 URL과 API Key를 따로 입력할 필요가 없습니다." = "Paste a single OPDS URL to connect. You do not need to enter the server URL and API Key separately.";
+"서버 URL과 API Key를 각각 입력합니다. 사용자명과 비밀번호로 로그인할 수도 있습니다." = "Enter the server URL and API Key separately. You can also log in with a username and password.";
+"Kavita OPDS" = "Kavita OPDS";
+"서버 URL과 API Key로 연결" = "Connect with a server URL and API Key";
+"OPDS 주소 하나로 연결" = "Connect with a single OPDS URL";
+
+"CBZ·ZIP 파일만 불러올 수 있습니다." = "Only CBZ and ZIP files can be imported.";
+
+"로그인 정보를 안전하게 저장하지 못했습니다. 서버 URL을 확인해주세요." = "Could not securely save login details. Check the server URL.";
+
+"고급 설정" = "Advanced settings";
+
+"인덱싱" = "Indexing";
+
+"다른 언어 제목으로 재검색" = "Search using alternate titles";
+
+
+"다른 언어 제목으로 재검색을 켜면 작품 제목을 위키백과에도 전송하여 연결된 영어 제목을 확인합니다." = "When alternate title search is enabled, title names are also sent to Wikipedia to look up linked English titles.";
+"작품 이름이 원어가 아닐 경우 인덱싱에 도움이 될 수 있습니다." = "May help with indexing when a title is not in its original language.";
+
+// Development-only genre diagnostics
+"개발용 장르 데이터" = "Development genre data";
+"전체 작품 수" = "Total series";
+"%d개 작품" = "%d series";
+"Kavita %d · 파일 %d" = "Kavita %d · Files %d";
+"현재 장르 상세 화면에 표시되는 작품 기준입니다. 권수가 아닌 작품 수이며, 여러 장르에 속한 작품은 각 장르에 중복 집계됩니다. 데이터 준비 중에는 수가 달라질 수 있습니다." = "Counts match the series currently shown on each genre detail screen. These count series, not volumes; series with multiple genres count toward each genre. Counts may change while data is being prepared.";
+
+// Development-only category editing
+"개발용 추가" = "Development additions";
+"개발용 장르·태그 추가" = "Development genres and tags";
+"이 기기에만 저장되며 Debug 빌드에서만 적용됩니다." = "Saved on this device and applied only in Debug builds.";
+"장르 추가" = "Add genre";
+"태그 추가" = "Add tag";
+"개발용 추가 항목 초기화" = "Reset development additions";
+"장르·태그를 저장하지 못했습니다. 다시 시도해 주세요." = "Could not save genres and tags. Please try again.";
+
+// Secure OPDS connection setup
+"Kavita의 사용자 설정 → 외부 클라이언트에서 OPDS 주소를 복사해 붙여넣으세요. HTTP 주소는 HTTPS로 전환하며, 연결 및 인증 확인 후 저장합니다." = "Copy and paste the OPDS URL from Kavita’s User Settings → 3rd Party Clients. HTTP URLs are upgraded to HTTPS and saved after connection and authentication checks succeed.";
+"HTTPS로 전환하여 서버 연결 및 API 키 인증에 성공했습니다." = "Upgraded to HTTPS, connected to the server, and authenticated the API key successfully.";
+"HTTPS 연결에 실패했습니다. 서버의 HTTPS 주소·포트와 인증서를 확인해주세요. 기존 설정은 유지됩니다." = "Could not connect over HTTPS. Check the server’s HTTPS address, port, and certificate. Your existing settings have been kept.";
+
+"커스텀" = "Custom";
+"커스텀 장르·태그 전체 삭제" = "Delete all custom genres and tags";
+"이 기기에 저장됩니다. 이미 있는 장르·태그는 같은 분류에 중복 추가할 수 없습니다." = "Saved on this device. Existing genres and tags cannot be added again in the same category.";
+"추가" = "Add";
+
+"페이지 넘김 효과" = "Page turn effect";
+
+"서버 주소" = "Server Address";
+"인증 방식" = "Authentication Method";
+"API 키" = "API Key";
+"계정 로그인" = "Account Login";
+"연결" = "Connect";
+"연결 중" = "Connecting";
+"연결 방식" = "Connection Method";
+"사용 중" = "In Use";
+"Kavita 사용자 설정 → 외부 클라이언트에서 복사" = "Copy from Kavita User Settings → 3rd Party Clients";
+"서버에 연결되었습니다." = "Connected to the server.";
+"서버에 연결할 수 없습니다. 주소와 인증 정보를 확인해주세요." = "Unable to connect. Check the address and credentials.";
+"서버 주소와 인증 정보로 연결" = "Connect with a server address and credentials";
+"계정 인증에 실패했습니다. 사용자명과 비밀번호를 확인해주세요." = "Account authentication failed. Check your username and password.";
+
+"분류 선택" = "Choose category";
+"자주 읽은 태그" = "Your most-read tags";
+"태그 둘러보기" = "Browse tags";
