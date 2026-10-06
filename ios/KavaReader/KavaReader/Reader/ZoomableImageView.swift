@@ -1,21 +1,135 @@
+import QuartzCore
 import SwiftUI
 import UIKit
 
-private enum ZoomTapRegion {
+enum ZoomTapRegion {
     case left
     case center
     case right
 }
 
+enum ReaderPageAlignment: Equatable {
+    case leading
+    case center
+    case trailing
+}
+
+struct PageEdgeColors {
+    let top: UIColor
+    let bottom: UIColor
+    let left: UIColor
+    let right: UIColor
+
+    static var fallback: PageEdgeColors {
+        PageEdgeColors(top: UIColor(AppTheme.background),
+                       bottom: UIColor(AppTheme.background),
+                       left: UIColor(AppTheme.background),
+                       right: UIColor(AppTheme.background))
+    }
+
+    init(top: UIColor, bottom: UIColor, left: UIColor, right: UIColor) {
+        self.top = top
+        self.bottom = bottom
+        self.left = left
+        self.right = right
+    }
+
+    init(image: UIImage) {
+        let side = 64
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format)
+        let thumbnail = renderer.image { context in
+            UIColor(AppTheme.background).setFill()
+            context.fill(CGRect(x: 0, y: 0, width: side, height: side))
+            image.draw(in: CGRect(x: 0, y: 0, width: side, height: side))
+        }
+        guard let source = thumbnail.cgImage else {
+            self = .fallback
+            return
+        }
+
+        var pixels = [UInt8](repeating: 0, count: side * side * 4)
+        let copied = pixels.withUnsafeMutableBytes { bytes -> Bool in
+            guard let context = CGContext(data: bytes.baseAddress,
+                                          width: side,
+                                          height: side,
+                                          bitsPerComponent: 8,
+                                          bytesPerRow: side * 4,
+                                          space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue |
+                                              CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            // Flip the UIKit image for Core Graphics drawing. Bitmap scanlines
+            // are read from the opposite vertical edge below.
+            context.translateBy(x: 0, y: CGFloat(side))
+            context.scaleBy(x: 1, y: -1)
+            context.draw(source, in: CGRect(x: 0, y: 0, width: side, height: side))
+            return true
+        }
+        guard copied else {
+            self = .fallback
+            return
+        }
+
+        top = Self.dominantColor(in: pixels, side: side) { x, y in y >= side - 2 }
+        bottom = Self.dominantColor(in: pixels, side: side) { x, y in y < 2 }
+        left = Self.dominantColor(in: pixels, side: side) { x, y in x < 2 }
+        right = Self.dominantColor(in: pixels, side: side) { x, y in x >= side - 2 }
+    }
+
+    private static func dominantColor(in pixels: [UInt8], side: Int,
+                                      includes: (Int, Int) -> Bool) -> UIColor
+    {
+        var buckets: [Int: (count: Int, red: Int, green: Int, blue: Int)] = [:]
+        for y in 0 ..< side {
+            for x in 0 ..< side where includes(x, y) {
+                let offset = (y * side + x) * 4
+                let red = Int(pixels[offset])
+                let green = Int(pixels[offset + 1])
+                let blue = Int(pixels[offset + 2])
+                let key = (red >> 4) << 8 | (green >> 4) << 4 | (blue >> 4)
+                var bucket = buckets[key] ?? (count: 0, red: 0, green: 0, blue: 0)
+                bucket.count += 1
+                bucket.red += red
+                bucket.green += green
+                bucket.blue += blue
+                buckets[key] = bucket
+            }
+        }
+        guard let mostCommon = buckets.values.max(by: { $0.count < $1.count }) else {
+            return UIColor(AppTheme.background)
+        }
+        return UIColor(red: CGFloat(mostCommon.red) / CGFloat(mostCommon.count * 255),
+                       green: CGFloat(mostCommon.green) / CGFloat(mostCommon.count * 255),
+                       blue: CGFloat(mostCommon.blue) / CGFloat(mostCommon.count * 255),
+                       alpha: 1)
+    }
+}
+
 private struct FrameModifier: ViewModifier {
     let scrollDirection: ScrollDirection
     let image: UIImage?
+    let minimumViewportHeight: CGFloat
+    let edgeColors: PageEdgeColors
 
     func body(content: Content) -> some View {
-        if scrollDirection == .horizontal {
+        if scrollDirection.isHorizontal {
             content.frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            content.aspectRatio(image != nil ? image!.size : CGSize(width: 1, height: 1), contentMode: .fit)
+            content
+                .aspectRatio(image != nil ? image!.size : CGSize(width: 1, height: 1), contentMode: .fit)
+                .frame(maxWidth: .infinity)
+                // Loaded pages use their image height so vertical pages meet without gaps.
+                .frame(minHeight: image == nil ? minimumViewportHeight : 0)
+                .background {
+                    LinearGradient(stops: [
+                        .init(color: Color(edgeColors.top), location: 0),
+                        .init(color: Color(edgeColors.top), location: 0.5),
+                        .init(color: Color(edgeColors.bottom), location: 0.5),
+                        .init(color: Color(edgeColors.bottom), location: 1),
+                    ], startPoint: .top, endPoint: .bottom)
+                }
         }
     }
 }
@@ -26,30 +140,50 @@ struct ZoomableImageView: View {
     let pageNumber: Int
     let viewModel: ReaderViewModel
     let isActive: Bool
-    let pageFitMode: PageFitMode
+    let isReaderUIVisible: Bool
+    let scrollDirection: ScrollDirection
+    let extendPageEdges: Bool
+    let tapEdgesToTurnPages: Bool
+    let turnsPageFromLeftEdge: Bool
+    let turnsPageFromRightEdge: Bool
+    let horizontalImageAlignment: ReaderPageAlignment
+    let minimumViewportHeight: CGFloat
     let onTap: () -> Void
     let onPageChange: (Int) -> Void
+    let onFirstPageBack: () -> Void
+    let onLastPageForward: () -> Void
     let onInteractionChange: (Bool) -> Void
-
-    @StateObject private var readerSettings = ReaderSettings.shared
 
     var body: some View {
         GeometryReader { geometry in
+            let edgeTapWidth = min(tapZoneWidth, geometry.size.width * 0.25)
+
             ZStack {
-                Color.black
+                AppTheme.background
                     .ignoresSafeArea(.all)
 
-                if let image = displayedImage {
-                    ZoomableScrollView(pageNumber: pageNumber,
-                                       image: image,
-                                       zoomScale: $zoomScale,
-                                       isInteracting: $isInteracting,
+                if let image = visibleImage {
+                    ZoomableScrollView(image: image,
+                                       edgeColors: effectiveEdgeColors,
                                        maxZoom: maxZoom,
-                                       tapZoneWidth: tapZoneWidth,
+                                       tapZoneWidth: edgeTapWidth,
                                        resetTrigger: resetToken,
-                                       pageFitMode: pageFitMode,
-                                       containerSize: geometry.size,
-                                       onSingleTap: handleSingleTap)
+                                       viewportFrame: imageViewportFrame,
+                                       isReaderUIVisible: isReaderUIVisible,
+                                       isHorizontalReader: scrollDirection.isHorizontal,
+                                       horizontalImageAlignment: horizontalImageAlignment,
+                                       onSingleTap: handleSingleTap,
+                                       onInteractionChange: onInteractionChange)
+                        .onGeometryChange(for: CGRect.self) { proxy in
+                            // Horizontal paging changes minX every frame. It is
+                            // not an image-layout change and must not schedule
+                            // alignment or SwiftUI state updates while swiping.
+                            let frame = proxy.frame(in: .global)
+                            return CGRect(x: 0, y: frame.minY,
+                                          width: frame.width, height: frame.height)
+                        } action: { frame in
+                            imageViewportFrame = frame
+                        }
                         .transition(.opacity)
                 } else if isLoading {
                     ProgressView()
@@ -62,7 +196,7 @@ struct ZoomableImageView: View {
                             .foregroundColor(.orange)
                             .font(.system(size: 24))
 
-                        Text(error)
+                        Text(AppLocalization.text(error))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.white)
                             .multilineTextAlignment(.center)
@@ -90,23 +224,20 @@ struct ZoomableImageView: View {
                 }
 
                 // 로딩 중에도 탭 제스처를 받을 수 있도록 투명 오버레이 추가
-                if displayedImage == nil {
+                if visibleImage == nil {
                     Color.clear
                         .contentShape(Rectangle())
                         .onTapGesture { location in
                             let width = geometry.size.width
-                            if location.x < tapZoneWidth {
+                            if location.x < edgeTapWidth {
                                 handleSingleTap(region: .left)
-                            } else if location.x > width - tapZoneWidth {
+                            } else if location.x > width - edgeTapWidth {
                                 handleSingleTap(region: .right)
                             } else {
                                 handleSingleTap(region: .center)
                             }
                         }
                 }
-            }
-            .onChange(of: isInteracting) { _, newValue in
-                onInteractionChange(newValue)
             }
             .onChange(of: isActive) { _, newValue in
                 guard newValue else { return }
@@ -116,38 +247,72 @@ struct ZoomableImageView: View {
                 await loadImage()
             }
         }
-        .modifier(FrameModifier(scrollDirection: readerSettings.scrollDirection, image: displayedImage))
+        .modifier(FrameModifier(scrollDirection: scrollDirection,
+                                image: visibleImage,
+                                minimumViewportHeight: minimumViewportHeight,
+                                edgeColors: effectiveEdgeColors))
     }
 
     // MARK: Private
 
-    @State private var zoomScale: CGFloat = 1.0
-    @State private var isInteracting = false
     @State private var displayedImage: UIImage?
+    @State private var edgeColors = PageEdgeColors.fallback
     @State private var isLoading = false
     @State private var loadError: String?
     @State private var resetToken: Int = 0
+    @State private var imageViewportFrame: CGRect = .zero
+
+    private var visibleImage: UIImage? {
+        displayedImage ?? viewModel.getPreloadedImage(for: pageNumber)
+    }
+
+    private var effectiveEdgeColors: PageEdgeColors {
+        extendPageEdges ? edgeColors : .fallback
+    }
 
     private let tapZoneWidth: CGFloat = 100
-    private let minZoom: CGFloat = 1.0
     private let maxZoom: CGFloat = 4.0
 
-    private func handleSingleTap(region: ZoomTapRegion) {
+    private func handleSingleTap(region: ZoomTapRegion, isZoomed: Bool = false) {
+        if !tapEdgesToTurnPages {
+            onTap()
+            return
+        }
         switch region {
         case .left:
-            if zoomScale <= minZoom + 0.01, pageNumber > 1 {
-                onPageChange(pageNumber - 1)
-            } else {
+            if isZoomed || !turnsPageFromLeftEdge {
                 onTap()
+            } else if scrollDirection.isRightToLeft {
+                goForward()
+            } else {
+                goBack()
             }
         case .center:
             onTap()
         case .right:
-            if zoomScale <= minZoom + 0.01, pageNumber < viewModel.totalPages {
-                onPageChange(pageNumber + 1)
-            } else {
+            if isZoomed || !turnsPageFromRightEdge {
                 onTap()
+            } else if scrollDirection.isRightToLeft {
+                goBack()
+            } else {
+                goForward()
             }
+        }
+    }
+
+    private func goBack() {
+        if pageNumber > 1 {
+            onPageChange(pageNumber - 1)
+        } else {
+            onFirstPageBack()
+        }
+    }
+
+    private func goForward() {
+        if pageNumber < viewModel.totalPages {
+            onPageChange(pageNumber + 1)
+        } else {
+            onLastPageForward()
         }
     }
 
@@ -155,11 +320,11 @@ struct ZoomableImageView: View {
     private func loadImage() async {
         loadError = nil
         isLoading = true
-        isInteracting = false
-        zoomScale = 1.0
 
         if let cached = viewModel.getPreloadedImage(for: pageNumber) {
+            edgeColors = PageEdgeColors(image: cached)
             displayedImage = cached
+            viewModel.didDisplayPage(pageNumber)
             isLoading = false
             requestZoomReset()
             return
@@ -179,355 +344,495 @@ struct ZoomableImageView: View {
             isLoading = false
             return
         }
+        edgeColors = PageEdgeColors(image: image)
         displayedImage = image
+        viewModel.didDisplayPage(pageNumber)
         isLoading = false
         requestZoomReset()
     }
 
     @MainActor
     private func requestZoomReset() {
-        zoomScale = 1.0
-        isInteracting = false
         resetToken &+= 1
     }
 }
 
-private struct ZoomableScrollView: UIViewRepresentable {
-    let pageNumber: Int
+// Keep every background layer outside UIScrollView's animated content coordinates.
+final class ReaderImageViewport: UIView {
+    let scrollView = ReaderImageScrollView()
+    private var imageSize: CGSize = .zero
+    private var edgeColors = PageEdgeColors.fallback
+    private let pageBackground = CAGradientLayer()
+    private var renderedStartColor: UIColor?
+    private var renderedEndColor: UIColor?
+    private var renderedHasVerticalMargins: Bool?
+    private let topMargin = CALayer()
+    private let bottomMargin = CALayer()
+    private let leftMargin = CALayer()
+    private let rightMargin = CALayer()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        clipsToBounds = true
+        isOpaque = true
+        pageBackground.locations = [0, 0.5, 0.5, 1]
+        layer.addSublayer(pageBackground)
+        for margin in [topMargin, bottomMargin, leftMargin, rightMargin] {
+            layer.addSublayer(margin)
+        }
+        scrollView.backgroundColor = .clear
+        scrollView.isOpaque = false
+        addSubview(scrollView)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func updateBackground(imageSize: CGSize, colors: PageEdgeColors) {
+        self.imageSize = imageSize
+        edgeColors = colors
+        updateFixedBackground()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // Resize the background, image and edge fills in one layout pass. A later
+        // scroll-view pass can otherwise leave edge fills at the previous size.
+        UIView.performWithoutAnimation {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            updateFixedBackground()
+            if scrollView.frame != bounds {
+                scrollView.frame = bounds
+            }
+            scrollView.setNeedsLayout()
+            scrollView.layoutIfNeeded()
+            CATransaction.commit()
+        }
+    }
+
+    private func updateFixedBackground() {
+        guard bounds.width > 0, bounds.height > 0 else { return }
+        let hasVerticalMargins = imageSize.width * bounds.height >= imageSize.height * bounds.width
+        let startColor = hasVerticalMargins ? edgeColors.top : edgeColors.left
+        let endColor = hasVerticalMargins ? edgeColors.bottom : edgeColors.right
+        guard pageBackground.frame != bounds || renderedStartColor != startColor ||
+            renderedEndColor != endColor || renderedHasVerticalMargins != hasVerticalMargins else { return }
+        renderedStartColor = startColor
+        renderedEndColor = endColor
+        renderedHasVerticalMargins = hasVerticalMargins
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        pageBackground.frame = bounds
+        pageBackground.colors = [startColor.cgColor, startColor.cgColor, endColor.cgColor, endColor.cgColor]
+        pageBackground.startPoint = hasVerticalMargins ? CGPoint(x: 0.5, y: 0) : CGPoint(x: 0, y: 0.5)
+        pageBackground.endPoint = hasVerticalMargins ? CGPoint(x: 0.5, y: 1) : CGPoint(x: 1, y: 0.5)
+        CATransaction.commit()
+    }
+
+    func updateMargins(around imageFrame: CGRect, colors: PageEdgeColors) {
+        let visible = bounds
+        let middleTop = max(visible.minY, imageFrame.minY)
+        let middleBottom = min(visible.maxY, imageFrame.maxY)
+        let middleHeight = max(0, middleBottom - middleTop)
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        topMargin.backgroundColor = colors.top.cgColor
+        bottomMargin.backgroundColor = colors.bottom.cgColor
+        leftMargin.backgroundColor = colors.left.cgColor
+        rightMargin.backgroundColor = colors.right.cgColor
+        topMargin.frame = CGRect(x: visible.minX, y: visible.minY,
+                                 width: visible.width, height: max(0, imageFrame.minY - visible.minY))
+        bottomMargin.frame = CGRect(x: visible.minX, y: max(visible.minY, imageFrame.maxY),
+                                    width: visible.width, height: max(0, visible.maxY - imageFrame.maxY))
+        leftMargin.frame = CGRect(x: visible.minX, y: middleTop,
+                                  width: max(0, imageFrame.minX - visible.minX), height: middleHeight)
+        rightMargin.frame = CGRect(x: max(visible.minX, imageFrame.maxX), y: middleTop,
+                                   width: max(0, visible.maxX - imageFrame.maxX), height: middleHeight)
+        CATransaction.commit()
+    }
+}
+
+// UIKit owns the zoom scale. At 1x, horizontal pages fit inside both viewport dimensions.
+final class ReaderImageScrollView: UIScrollView {
+    var onLayout: ((ReaderImageScrollView) -> Void)?
+
+    override func layoutSubviews() {
+        if zoomScale == 1 && !isZooming && !isZoomBouncing {
+            // Status-bar transitions can lend their animation to image layout
+            // while the margin layers already update immediately. Keep them in
+            // the same unanimated pass, while preserving animated zoom gestures.
+            UIView.performWithoutAnimation {
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                layoutImageSubviews()
+                CATransaction.commit()
+            }
+        } else {
+            layoutImageSubviews()
+        }
+    }
+
+    private func layoutImageSubviews() {
+        super.layoutSubviews()
+        onLayout?(self)
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        // Recheck the final viewport size after attachment.
+        setNeedsLayout()
+    }
+
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        if gestureRecognizer === panGestureRecognizer && zoomScale <= 1.01 {
+            return false
+        }
+        return super.gestureRecognizerShouldBegin(gestureRecognizer)
+    }
+}
+
+struct ZoomableScrollView: UIViewRepresentable {
     let image: UIImage
-    @Binding var zoomScale: CGFloat
-    @Binding var isInteracting: Bool
+    let edgeColors: PageEdgeColors
     let maxZoom: CGFloat
     let tapZoneWidth: CGFloat
     let resetTrigger: Int
-    let pageFitMode: PageFitMode
-    let containerSize: CGSize
-    let onSingleTap: (ZoomTapRegion) -> Void
+    // Track size and global Y for status-bar changes, excluding horizontal
+    // translation caused by paging (the reported frame's X is always zero).
+    let viewportFrame: CGRect
+    let isReaderUIVisible: Bool
+    let isHorizontalReader: Bool
+    let horizontalImageAlignment: ReaderPageAlignment
+    let onSingleTap: (ZoomTapRegion, Bool) -> Void
+    let onInteractionChange: (Bool) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
     }
 
-    func makeUIView(context: Context) -> UIScrollView {
-        let scrollView = UIScrollView()
-        scrollView.delegate = context.coordinator
-        scrollView.backgroundColor = .black
+    func makeUIView(context: Context) -> ReaderImageViewport {
+        makeViewport(coordinator: context.coordinator)
+    }
+
+    func makeViewport(coordinator: Coordinator) -> ReaderImageViewport {
+        let viewport = ReaderImageViewport()
+        viewport.updateBackground(imageSize: image.size, colors: edgeColors)
+        let scrollView = viewport.scrollView
+        scrollView.delegate = coordinator
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.showsVerticalScrollIndicator = false
+        scrollView.minimumZoomScale = 1
+        scrollView.maximumZoomScale = maxZoom
         scrollView.bouncesZoom = true
-        scrollView.bounces = true
-        scrollView.maximumZoomScale = 1.0
-        scrollView.minimumZoomScale = 1.0
         scrollView.alwaysBounceHorizontal = false
         scrollView.alwaysBounceVertical = false
         scrollView.contentInsetAdjustmentBehavior = .never
-
-        context.coordinator.setup(in: scrollView)
-        context.coordinator.update(image: image, in: scrollView, resetZoom: true, resetTrigger: resetTrigger)
-
-        return scrollView
+        scrollView.delaysContentTouches = false
+        coordinator.setup(in: scrollView)
+        scrollView.onLayout = { [weak coordinator] view in
+            coordinator?.layout(in: view)
+        }
+        coordinator.update(image: image, in: scrollView)
+        return viewport
     }
 
-    func updateUIView(_ scrollView: UIScrollView, context: Context) {
-        context.coordinator.parent = self
-        context.coordinator.update(image: image, in: scrollView, resetZoom: false, resetTrigger: resetTrigger)
-
-        let baseScale = context.coordinator.baseZoomScale
-        let minScale = context.coordinator.minZoomScale
-        let targetScale = max(minScale, min(context.coordinator.maxZoomScale, baseScale * zoomScale))
-        if abs(scrollView.zoomScale - targetScale) > 0.01 {
-            scrollView.setZoomScale(targetScale, animated: false)
+    func updateUIView(_ viewport: ReaderImageViewport, context: Context) {
+        viewport.updateBackground(imageSize: image.size, colors: edgeColors)
+        let scrollView = viewport.scrollView
+        let visibilityChanged = context.coordinator.parent.isReaderUIVisible != isReaderUIVisible
+        let needsAlignment = context.coordinator.parent.viewportFrame != viewportFrame ||
+            visibilityChanged || context.coordinator.parent.horizontalImageAlignment != horizontalImageAlignment
+        if visibilityChanged {
+            context.coordinator.captureZoomAnchor(in: scrollView)
         }
+        context.coordinator.parent = self
+        context.coordinator.update(image: image, in: scrollView)
+        if needsAlignment {
+            // Geometry is reported after the ancestor layout. Recenter against that
+            // completed layout, without resetting zoom or the reader's page state.
+            context.coordinator.scheduleAlignment(in: scrollView)
+        }
+    }
 
-        scrollView.isScrollEnabled = zoomScale > 1.01
+    static func dismantleUIView(_ viewport: ReaderImageViewport, coordinator: Coordinator) {
+        let scrollView = viewport.scrollView
+        scrollView.onLayout = nil
+        scrollView.delegate = nil
     }
 
     final class Coordinator: NSObject, UIScrollViewDelegate, UIGestureRecognizerDelegate {
-        // MARK: Lifecycle
+        private struct ZoomAnchor {
+            let imagePoint: CGPoint
+            let windowPoint: CGPoint
+            let windowBounds: CGRect
+        }
+
+        var parent: ZoomableScrollView
+        private let imageView = UIImageView()
+        private var fittedSize: CGSize = .zero
+        private var fittedViewportSize: CGSize = .zero
+        private var fittedForHorizontalReader = false
+        private var lastResetTrigger: Int?
+        private var needsReset = true
+        private var isLayingOut = false
+        private var lastInteractionState = false
+        private var isAlignmentScheduled = false
+        private var zoomAnchor: ZoomAnchor?
+        private weak var edgeTap: UITapGestureRecognizer?
 
         init(parent: ZoomableScrollView) {
             self.parent = parent
             super.init()
             imageView.contentMode = .scaleAspectFit
             imageView.isUserInteractionEnabled = false
-            maxZoomScale = parent.maxZoom
         }
-
-        // MARK: Internal
-
-        var parent: ZoomableScrollView
-        let imageView = UIImageView()
-        var baseZoomScale: CGFloat = 1.0
-        var maxZoomScale: CGFloat = 4.0
-        var minZoomScale: CGFloat = 1.0
 
         func setup(in scrollView: UIScrollView) {
             scrollView.addSubview(imageView)
 
             let doubleTap = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap(_:)))
             doubleTap.numberOfTapsRequired = 2
-            doubleTap.delegate = self
-            scrollView.addGestureRecognizer(doubleTap)
+            configure(doubleTap, in: scrollView)
 
-            let singleTap = UITapGestureRecognizer(target: self, action: #selector(handleSingleTap(_:)))
-            singleTap.delegate = self
-            singleTap.require(toFail: doubleTap)
-            scrollView.addGestureRecognizer(singleTap)
+            let centerTap = UITapGestureRecognizer(target: self, action: #selector(handleSingleTap(_:)))
+            centerTap.require(toFail: doubleTap)
+            configure(centerTap, in: scrollView)
+
+            // Page-turn taps do not wait for the center area's double-tap zoom recognizer.
+            let edgeTap = UITapGestureRecognizer(target: self, action: #selector(handleSingleTap(_:)))
+            self.edgeTap = edgeTap
+            configure(edgeTap, in: scrollView)
         }
 
-        func update(image: UIImage, in scrollView: UIScrollView, resetZoom: Bool, resetTrigger: Int) {
-            let isNewImage: Bool
-            if imageView.image === image {
-                isNewImage = false
-            } else {
+        private func configure(_ recognizer: UITapGestureRecognizer, in scrollView: UIScrollView) {
+            recognizer.delegate = self
+            recognizer.cancelsTouchesInView = false
+            recognizer.delaysTouchesBegan = false
+            recognizer.delaysTouchesEnded = false
+            scrollView.addGestureRecognizer(recognizer)
+        }
+
+        func update(image: UIImage, in scrollView: UIScrollView) {
+            if imageView.image !== image {
                 imageView.image = image
-                imageView.frame = CGRect(origin: .zero, size: image.size)
-                isNewImage = true
+                needsReset = true
             }
+            if lastResetTrigger != parent.resetTrigger {
+                needsReset = true
+                lastResetTrigger = parent.resetTrigger
+            }
+            // Safe-area/UI updates only request layout; they never reapply a zoom value.
+            scrollView.setNeedsLayout()
+        }
 
-            let boundsChanged = scrollView.bounds.size != previousBoundsSize
-            let shouldReset = resetZoom || isNewImage || boundsChanged || resetTrigger != lastResetTrigger
-            if configureZoomScales(for: scrollView, resetZoom: shouldReset, newImage: isNewImage,
-                                   resetTrigger: resetTrigger)
-            {
-                previousBoundsSize = scrollView.bounds.size
-                lastResetTrigger = resetTrigger
+        func scheduleAlignment(in scrollView: UIScrollView) {
+            guard !isAlignmentScheduled else { return }
+            isAlignmentScheduled = true
+            DispatchQueue.main.async { [weak self, weak scrollView] in
+                guard let self else { return }
+                self.isAlignmentScheduled = false
+                guard let scrollView, scrollView.window != nil else { return }
+                scrollView.setNeedsLayout()
+                scrollView.layoutIfNeeded()
             }
         }
 
-        func viewForZooming(in _: UIScrollView) -> UIView? {
+        func captureZoomAnchor(in scrollView: UIScrollView) {
+            guard zoomAnchor == nil, scrollView.zoomScale > 1.01,
+                  let window = scrollView.window else { return }
+            let point = CGPoint(x: window.bounds.midX, y: window.bounds.midY)
+            zoomAnchor = ZoomAnchor(imagePoint: imageView.convert(point, from: window),
+                                    windowPoint: point,
+                                    windowBounds: window.bounds)
+        }
+
+        private func restoreZoomAnchor(in scrollView: UIScrollView) {
+            guard let anchor = zoomAnchor, let window = scrollView.window else { return }
+            guard scrollView.zoomScale > 1.01, window.bounds == anchor.windowBounds else {
+                zoomAnchor = nil
+                return
+            }
+            let currentPoint = imageView.convert(anchor.imagePoint, to: scrollView)
+            let targetPoint = scrollView.convert(anchor.windowPoint, from: window)
+            let offset = CGPoint(x: scrollView.contentOffset.x + currentPoint.x - targetPoint.x,
+                                 y: scrollView.contentOffset.y + currentPoint.y - targetPoint.y)
+
+            // At an image edge the correction may lie outside the old scroll range.
+            // Permit that offset so UIKit cannot clamp it back on the next layout.
+            let inset = UIEdgeInsets(top: max(0, -offset.y),
+                                     left: max(0, -offset.x),
+                                     bottom: max(0, offset.y + scrollView.bounds.height - scrollView.contentSize.height),
+                                     right: max(0, offset.x + scrollView.bounds.width - scrollView.contentSize.width))
+            if scrollView.contentInset != inset { scrollView.contentInset = inset }
+            if abs(scrollView.contentOffset.x - offset.x) > 0.5 || abs(scrollView.contentOffset.y - offset.y) > 0.5 {
+                scrollView.setContentOffset(offset, animated: false)
+            }
+        }
+
+        func layout(in scrollView: UIScrollView) {
+            guard !isLayingOut,
+                  let image = imageView.image,
+                  image.size.width > 0, image.size.height > 0,
+                  scrollView.bounds.width > 0, scrollView.bounds.height > 0 else { return }
+            isLayingOut = true
+            defer { isLayingOut = false }
+
+            let viewportSize = scrollView.bounds.size
+            let widthChanged = abs(fittedViewportSize.width - viewportSize.width) > 0.5
+            let heightChanged = abs(fittedViewportSize.height - viewportSize.height) > 0.5
+            let needsHeightRefit = parent.isHorizontalReader && heightChanged && scrollView.zoomScale <= 1.01
+            if needsReset || widthChanged || needsHeightRefit || fittedForHorizontalReader != parent.isHorizontalReader {
+                zoomAnchor = nil
+                scrollView.contentInset = .zero
+                // Reset UIKit's transform before changing the image's unscaled bounds.
+                scrollView.setZoomScale(1, animated: false)
+                imageView.transform = .identity
+                let widthScale = viewportSize.width / image.size.width
+                let fitScale = parent.isHorizontalReader
+                    ? min(widthScale, viewportSize.height / image.size.height)
+                    : widthScale
+                fittedSize = CGSize(width: image.size.width * fitScale,
+                                    height: image.size.height * fitScale)
+                fittedViewportSize = viewportSize
+                fittedForHorizontalReader = parent.isHorizontalReader
+                imageView.bounds = CGRect(origin: .zero, size: fittedSize)
+                imageView.center = CGPoint(x: fittedSize.width / 2, y: fittedSize.height / 2)
+                scrollView.contentSize = fittedSize
+                scrollView.setContentOffset(.zero, animated: false)
+                needsReset = false
+            }
+            centerImage(in: scrollView)
+            updateMargins(in: scrollView)
+            reportInteraction(in: scrollView)
+        }
+
+        func viewForZooming(in scrollView: UIScrollView) -> UIView? {
             imageView
         }
 
-        func scrollViewWillBeginZooming(_: UIScrollView, with _: UIView?) {
-            parent.isInteracting = true
+        func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+            zoomAnchor = nil
+        }
+
+        func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
+            zoomAnchor = nil
         }
 
         func scrollViewDidZoom(_ scrollView: UIScrollView) {
-            guard baseZoomScale > 0 else { return }
-            let normalizedScale = scrollView.zoomScale / baseZoomScale
-            if abs(parent.zoomScale - normalizedScale) > 0.0001 {
-                parent.zoomScale = normalizedScale
-            }
-            centerImage(in: scrollView, resetPosition: false)
-            updateInteractionState(for: scrollView)
+            guard !isLayingOut else { return }
+            centerImage(in: scrollView)
+            updateMargins(in: scrollView)
+            reportInteraction(in: scrollView)
         }
 
-        func scrollViewDidEndZooming(_ scrollView: UIScrollView, with _: UIView?, atScale scale: CGFloat) {
-            guard baseZoomScale > 0 else { return }
-            let normalizedScale = scale / baseZoomScale
-            if abs(parent.zoomScale - normalizedScale) > 0.0001 {
-                parent.zoomScale = normalizedScale
-            }
-            if scale < baseZoomScale - 0.001 {
-                scrollView.setZoomScale(baseZoomScale, animated: true)
-                parent.zoomScale = 1.0
-            }
-            centerImage(in: scrollView, resetPosition: true)
-            updateInteractionState(for: scrollView)
+        func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
+            guard !isLayingOut else { return }
+            centerImage(in: scrollView)
+            updateMargins(in: scrollView)
+            reportInteraction(in: scrollView)
         }
 
-        func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
-            if scrollView.zoomScale > baseZoomScale + 0.01 {
-                if !parent.isInteracting {
-                    parent.isInteracting = true
-                }
-            }
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            updateMargins(in: scrollView)
         }
 
-        func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-            if !decelerate {
-                updateInteractionState(for: scrollView)
-            }
-        }
-
-        func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-            updateInteractionState(for: scrollView)
-        }
-
-        func gestureRecognizer(_: UIGestureRecognizer,
-                               shouldRecognizeSimultaneouslyWith _: UIGestureRecognizer) -> Bool
-        {
-            true
-        }
-
-        // MARK: Private
-
-        private var previousBoundsSize: CGSize = .zero
-
-        private var lastResetTrigger: Int = -1
-
-        @discardableResult
-        private func configureZoomScales(for scrollView: UIScrollView, resetZoom: Bool, newImage: Bool,
-                                         resetTrigger: Int) -> Bool
-        {
-            guard let image = imageView.image, image.size.width > 0, image.size.height > 0 else { return false }
-            let boundsSize = scrollView.bounds.size
-            guard boundsSize.width > 0 && boundsSize.height > 0 else {
-                DispatchQueue.main.async { [weak self, weak scrollView] in
-                    guard
-                        let self,
-                        let scrollView = scrollView,
-                        let _ = self.imageView.image
-                    else { return }
-                    _ = self.configureZoomScales(for: scrollView, resetZoom: resetZoom, newImage: newImage,
-                                                 resetTrigger: resetTrigger)
-                }
-                return false
-            }
-
-            let xScale = boundsSize.width / image.size.width
-            let yScale = boundsSize.height / image.size.height
-
-            // 현재는 너비에 맞춤만 사용되므로 xScale을 기본 배율로 사용
-            let baseScale = xScale
-
-            let maxScale = max(baseScale * parent.maxZoom, baseScale)
-            let minZoomScale = max(0.1, min(baseScale, min(xScale, yScale)) * 0.5)
-
-            baseZoomScale = baseScale
-            maxZoomScale = maxScale
-            self.minZoomScale = minZoomScale
-            scrollView.minimumZoomScale = minZoomScale
-            scrollView.maximumZoomScale = maxScale
-
-            let minRelative = minZoomScale / max(baseScale, 0.0001)
-            let currentRelative = max(parent.zoomScale, minRelative)
-            let targetScale: CGFloat
-            if resetZoom {
-                targetScale = baseScale
-            } else {
-                targetScale = max(minZoomScale, min(maxScale, currentRelative * baseScale))
-            }
-
-            // zoomScale을 먼저 설정한 후 contentSize 설정
-            if abs(scrollView.zoomScale - targetScale) > 0.01 || newImage {
-                scrollView.zoomScale = targetScale
-            }
-
-            if newImage {
-                scrollView.contentSize = image.size
-            }
-
-            let normalizedScale = targetScale / baseScale
-            if abs(parent.zoomScale - normalizedScale) > 0.0001 {
-                parent.zoomScale = normalizedScale
-            }
-
-            let boundsChanged = scrollView.bounds.size != previousBoundsSize
-            let shouldResetPosition = resetZoom || newImage || boundsChanged || resetTrigger != lastResetTrigger
-
-            centerImage(in: scrollView, resetPosition: shouldResetPosition)
-            updateInteractionState(for: scrollView)
-
-            if resetZoom {
-                if parent.isInteracting {
-                    parent.isInteracting = false
-                }
-            }
-            return true
-        }
-
-        @objc private func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
-            guard let scrollView = gesture.view as? UIScrollView else { return }
-            let location = gesture.location(in: imageView)
-            let boundedCenter = CGPoint(x: max(0, min(location.x, imageView.bounds.width)),
-                                        y: max(0, min(location.y, imageView.bounds.height)))
-            let currentRelative = scrollView.zoomScale / max(baseZoomScale, 0.0001)
-
-            if currentRelative > 1.01 {
-                scrollView.setZoomScale(baseZoomScale, animated: true)
-            } else {
-                let targetRelative = min(parent.maxZoom, currentRelative * 2)
-                let targetScale = baseZoomScale * targetRelative
-                let zoomRect = zoomRect(for: scrollView, scale: targetScale, center: boundedCenter)
-                scrollView.zoom(to: zoomRect, animated: true)
-            }
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            guard let scrollView = gestureRecognizer.view as? UIScrollView else { return false }
+            let x = touch.location(in: scrollView).x - scrollView.bounds.minX
+            let isEdge = x < parent.tapZoneWidth || x > scrollView.bounds.width - parent.tapZoneWidth
+            return gestureRecognizer === edgeTap ? isEdge : !isEdge
         }
 
         @objc private func handleSingleTap(_ gesture: UITapGestureRecognizer) {
             guard let scrollView = gesture.view as? UIScrollView else { return }
-            let location = gesture.location(in: scrollView)
-            let width = scrollView.bounds.width
-
+            let x = gesture.location(in: scrollView).x - scrollView.bounds.minX
             let region: ZoomTapRegion
-            if location.x < parent.tapZoneWidth {
+            if x < parent.tapZoneWidth {
                 region = .left
-            } else if location.x > width - parent.tapZoneWidth {
+            } else if x > scrollView.bounds.width - parent.tapZoneWidth {
                 region = .right
             } else {
                 region = .center
             }
-
-            parent.onSingleTap(region)
+            // Capture before SwiftUI moves any ancestors for the status-bar change.
+            captureZoomAnchor(in: scrollView)
+            parent.onSingleTap(region, scrollView.zoomScale > 1.01)
         }
 
-        private func centerImage(in scrollView: UIScrollView, resetPosition: Bool) {
-            let boundsSize = scrollView.bounds.size
-            guard boundsSize.width > 0, boundsSize.height > 0 else { return }
-
-            let zoomScale = scrollView.zoomScale
-            guard let image = imageView.image else { return }
-            let imageSize = image.size
-
-            // imageView.frame의 크기가 잘못되어 있으면 수정
-            let expectedFrameSize = CGSize(width: imageSize.width * zoomScale,
-                                          height: imageSize.height * zoomScale)
-            if abs(imageView.frame.width - expectedFrameSize.width) > 1.0 ||
-               abs(imageView.frame.height - expectedFrameSize.height) > 1.0 {
-                imageView.frame.size = expectedFrameSize
+        @objc private func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
+            guard let scrollView = gesture.view as? UIScrollView else { return }
+            zoomAnchor = nil
+            if scrollView.zoomScale > 1.01 {
+                scrollView.setZoomScale(1, animated: true)
+            } else {
+                let scale = min(parent.maxZoom, 2)
+                let location = gesture.location(in: imageView)
+                let size = CGSize(width: scrollView.bounds.width / scale,
+                                  height: scrollView.bounds.height / scale)
+                let rect = CGRect(x: location.x - size.width / 2, y: location.y - size.height / 2,
+                                  width: size.width, height: size.height)
+                scrollView.zoom(to: rect, animated: true)
             }
+        }
 
-            let displayWidth = imageSize.width * zoomScale
-            let displayHeight = imageSize.height * zoomScale
-
-            let horizontalPadding = max(0, (boundsSize.width - displayWidth) / 2)
-            let verticalPadding = max(0, (boundsSize.height - displayHeight) / 2)
-
-            // 줌 상태에 따라 정렬 방식 결정
-            // 줌인 상태(이미지가 화면보다 큼)면 패딩 없이 화면 100% 사용
-            // 줌 아웃 상태(이미지가 화면보다 작음)면 가로/세로 중앙 정렬
-            let isZoomedIn = displayWidth > boundsSize.width || displayHeight > boundsSize.height
-
-            // 가로/세로 모두: 줌인 시 패딩 없음, 아니면 중앙 정렬
-            let insetLeft = isZoomedIn ? 0 : horizontalPadding
-            let insetRight = isZoomedIn ? 0 : horizontalPadding
-            let insetTop = isZoomedIn ? 0 : verticalPadding
-            let insetBottom = isZoomedIn ? 0 : verticalPadding
-
-            let targetInset = UIEdgeInsets(top: insetTop,
-                                           left: insetLeft,
-                                           bottom: insetBottom,
-                                           right: insetRight)
-
-            if scrollView.contentInset != targetInset {
-                scrollView.contentInset = targetInset
+        private func centerImage(in scrollView: UIScrollView) {
+            guard fittedSize.width > 0 else { return }
+            let displayedSize = CGSize(width: fittedSize.width * scrollView.zoomScale,
+                                       height: fittedSize.height * scrollView.zoomScale)
+            if abs(scrollView.contentSize.width - displayedSize.width) > 0.5 ||
+               abs(scrollView.contentSize.height - displayedSize.height) > 0.5 {
+                scrollView.contentSize = displayedSize
             }
-
-            if resetPosition && !parent.isInteracting {
-                let targetOffset = CGPoint(x: -insetLeft, y: -insetTop)
-                let currentOffset = scrollView.contentOffset
-                if abs(currentOffset.x - targetOffset.x) > 0.5 || abs(currentOffset.y - targetOffset.y) > 0.5 {
-                    scrollView.setContentOffset(targetOffset, animated: false)
+            if scrollView.zoomScale == 1 {
+                zoomAnchor = nil
+                if scrollView.contentInset != .zero { scrollView.contentInset = .zero }
+                if scrollView.contentOffset != .zero {
+                    scrollView.setContentOffset(.zero, animated: false)
                 }
             }
-        }
-
-        private func zoomRect(for scrollView: UIScrollView, scale: CGFloat, center: CGPoint) -> CGRect {
-            var zoomRect = CGRect.zero
-            zoomRect.size.height = scrollView.bounds.height / scale
-            zoomRect.size.width = scrollView.bounds.width / scale
-            zoomRect.origin.x = center.x - (zoomRect.size.width / 2.0)
-            zoomRect.origin.y = center.y - (zoomRect.size.height / 2.0)
-            return zoomRect
-        }
-
-        private func updateInteractionState(for scrollView: UIScrollView) {
-            guard baseZoomScale > 0 else { return }
-            let isZoomed = scrollView.zoomScale > baseZoomScale + 0.01
-            if parent.isInteracting != isZoomed {
-                parent.isInteracting = isZoomed
+            let boundsSize = scrollView.bounds.size
+            var center = CGPoint(x: max(displayedSize.width, boundsSize.width) / 2,
+                                 y: max(displayedSize.height, boundsSize.height) / 2)
+            if parent.isHorizontalReader, scrollView.zoomScale <= 1.01 {
+                // Keep paired pages touching at the center; any spare width stays outside the spread.
+                switch parent.horizontalImageAlignment {
+                case .leading:
+                    center.x = displayedSize.width / 2
+                case .center:
+                    break
+                case .trailing:
+                    center.x = boundsSize.width - displayedSize.width / 2
+                }
             }
+            // Fit, center and edge fills all use this viewport's coordinates.
+            // Centering in window coordinates can put part of a fitted page outside
+            // the clipping bounds while a page controller updates its safe area.
+            if abs(imageView.center.x - center.x) > 0.5 || abs(imageView.center.y - center.y) > 0.5 {
+                imageView.center = center
+            }
+            restoreZoomAnchor(in: scrollView)
+        }
+
+        private func reportInteraction(in scrollView: UIScrollView) {
+            let isZoomed = scrollView.zoomScale > 1.01
+            // At 1x only the outer pager should recognize a pan. Merely rejecting
+            // the inner pan in shouldBegin still participates in nested-scroll
+            // gesture arbitration. Pinch and double-tap zoom remain enabled.
+            if scrollView.panGestureRecognizer.isEnabled != isZoomed {
+                scrollView.panGestureRecognizer.isEnabled = isZoomed
+            }
+            guard isZoomed != lastInteractionState else { return }
+            lastInteractionState = isZoomed
+            parent.onInteractionChange(isZoomed)
+        }
+
+        private func updateMargins(in scrollView: UIScrollView) {
+            guard let viewport = scrollView.superview as? ReaderImageViewport else { return }
+            let imageFrame = scrollView.convert(imageView.frame, to: viewport)
+            viewport.updateMargins(around: imageFrame, colors: parent.edgeColors)
         }
     }
 }
