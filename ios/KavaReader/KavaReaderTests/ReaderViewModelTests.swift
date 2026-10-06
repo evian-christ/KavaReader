@@ -75,6 +75,32 @@ final class ReaderViewModelTests: XCTestCase {
         XCTAssertNil(viewModel.errorMessage)
     }
 
+    func testDisplayingTheCurrentPagePublishesReadingActivity() async {
+        let seriesID = series.id
+        let activity = expectation(forNotification: .readerDidRead, object: nil) { notification in
+            (notification.userInfo?["item"] as? ContinueReadingItem)?.series.id == seriesID
+        }
+        await viewModel.loadChapter()
+        let image = await viewModel.loadImageForReader(pageNumber: 1)
+        XCTAssertNotNil(image)
+        viewModel.didDisplayPage(1)
+        await fulfillment(of: [activity], timeout: 1)
+    }
+
+    func testFailedImageLoadDoesNotPublishReadingActivity() async {
+        let seriesID = series.id
+        let activity = expectation(forNotification: .readerDidRead, object: nil) { notification in
+            (notification.userInfo?["item"] as? ContinueReadingItem)?.series.id == seriesID
+        }
+        activity.isInverted = true
+        mockImageFetcher.error = URLError(.notConnectedToInternet)
+        await viewModel.loadChapter()
+        let image = await viewModel.loadImageForReader(pageNumber: 1)
+        XCTAssertNil(image)
+        await viewModel.saveProgressNow()
+        await fulfillment(of: [activity], timeout: 0.05)
+    }
+
     func testGoToValidPage() async {
         // Given
         let targetPage = 5
@@ -158,6 +184,8 @@ final class ReaderViewModelTests: XCTestCase {
 class MockLibraryService: LibraryServicing {
     var shouldFailImageLoad = false
     var pageImageURLError: LibraryServiceError?
+
+    func fetchContinueReadingItems() async throws -> [ContinueReadingItem] { [] }
 
     func fetchSections() async throws -> [LibrarySection] {
         return []
