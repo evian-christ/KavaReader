@@ -1,59 +1,46 @@
-import Combine
 import SwiftUI
 
 struct SectionDetailView: View {
     // MARK: Internal
 
     let sectionTitle: String
+    @ObservedObject var viewModel: LibraryViewModel
+    @AppStorage(AppLanguage.storageKey) private var selectedLanguage = AppLanguage.korean.rawValue
 
     var body: some View {
         Group {
-            if viewModel.isLoading {
-                ProgressView("만화 목록을 불러오는 중")
-                    .progressViewStyle(.circular)
-            } else if let error = viewModel.errorMessage {
-                SectionErrorView(message: error) {
-                    Task { await loadSection(force: true) }
-                }
-            } else if viewModel.series.isEmpty {
-                SectionEmptyView()
+            if series.isEmpty {
+                SectionEmptyView(message: sectionTitle == "Favourite"
+                    ? "작품에서 하트를 누르면 여기에 표시됩니다."
+                    : "표시할 작품이 없습니다.")
             } else {
                 sectionContent
             }
         }
-        .navigationTitle(sectionTitle)
+        .navigationTitle(AppLocalization.text(sectionTitle,
+                                             language: AppLanguage(rawValue: selectedLanguage) ?? .korean))
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            await loadSection()
-        }
-        .refreshable {
-            await loadSection(force: true)
-        }
-        .onChange(of: serverBaseURL) {
-            Task { await loadSection(force: true) }
-        }
     }
 
     // MARK: Private
 
-    @AppStorage("server_base_url") private var serverBaseURL: String = ""
-    @AppStorage("server_api_key") private var apiKey: String = ""
-
-    @StateObject private var viewModel = SectionDetailViewModel()
-    @State private var lastServiceKey: String = ""
-
     private let grid = [GridItem(.adaptive(minimum: 140), spacing: 24)]
 
-    private var currentFactory: LibraryServiceFactory {
-        LibraryServiceFactory(baseURLString: serverBaseURL, apiKey: apiKey.isEmpty ? nil : apiKey)
+    private var series: [LibrarySeries] {
+        viewModel.sections.first(where: { $0.title == sectionTitle })?.series ?? []
+    }
+
+    private var readingSeriesIds: Set<Int> {
+        Set(viewModel.sections.first(where: { $0.title == "읽는 중" })?.items.compactMap(\.kavitaSeriesId) ?? [])
     }
 
     private var sectionContent: some View {
         ScrollView {
             LazyVGrid(columns: grid, spacing: 24) {
-                ForEach(viewModel.series) { series in
+                ForEach(series) { series in
                     NavigationLink(value: series) {
-                        LibraryCoverView(series: series)
+                        LibraryCoverView(series: series,
+                                         isReading: series.kavitaSeriesId.map(readingSeriesIds.contains) ?? false)
                     }
                     .buttonStyle(.plain)
                 }
@@ -61,20 +48,7 @@ struct SectionDetailView: View {
             .padding(.horizontal, 28)
             .padding(.top, 32)
         }
-        .background(Color(.systemBackground))
-    }
-
-    private func loadSection(force: Bool = false) async {
-        updateService(force: force)
-        await viewModel.loadSection(sectionTitle: sectionTitle, force: force)
-    }
-
-    private func updateService(force: Bool) {
-        let key = "\(serverBaseURL)|\(apiKey)"
-        if force || key != lastServiceKey {
-            viewModel.updateService(currentFactory.makeService())
-            lastServiceKey = key
-        }
+        .background(AppTheme.background)
     }
 }
 
@@ -82,30 +56,48 @@ private struct LibraryCoverView: View {
     // MARK: Internal
 
     let series: LibrarySeries
+    let isReading: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        GeometryReader { geometry in
             ZStack(alignment: .bottomLeading) {
                 if let url = series.coverURL {
-                    CoverImageView(url: url, height: 200, cornerRadius: 16, gradientColors: gradientColors)
+                    CoverImageView(url: url, height: geometry.size.height, cornerRadius: 6,
+                                   gradientColors: gradientColors)
                 } else {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(LinearGradient(colors: gradientColors, startPoint: .topLeading,
                                              endPoint: .bottomTrailing))
-                        .frame(height: 200)
+                        .frame(height: geometry.size.height)
                 }
+                LinearGradient(colors: [.clear, .black.opacity(0.8)],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(height: geometry.size.height * 0.55)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(series.title)
                         .font(.headline)
                         .foregroundStyle(.white)
                         .lineLimit(2)
+                        .shadow(color: .black.opacity(0.9), radius: 5, x: 0, y: 2)
                     Text(series.author)
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.8))
+                        .shadow(color: .black.opacity(0.8), radius: 4, x: 0, y: 2)
                 }
-                .padding(16)
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 10)
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .overlay(alignment: .topTrailing) {
+                if isReading && !series.isRead { ReadingBookmarkBadge() }
+            }
+            .overlay(alignment: .topTrailing) {
+                if series.isRead { ReadCheckBadge() }
             }
         }
+        .aspectRatio(2.0 / 3.0, contentMode: .fit)
     }
 
     // MARK: Private
@@ -113,86 +105,29 @@ private struct LibraryCoverView: View {
     @MainActor
     private var gradientColors: [Color] {
         let colors = series.coverColorHexes.compactMap(Color.init(hex:))
-        return colors.isEmpty ? [.purple, .blue] : colors
-    }
-}
-
-private struct SectionErrorView: View {
-    let message: String
-    let retryAction: () -> Void
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.largeTitle)
-                .foregroundStyle(.orange)
-            Text(message)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-            Button("다시 시도") {
-                retryAction()
-            }
-            .buttonStyle(.borderedProminent)
-        }
-        .padding(32)
+        return colors.isEmpty ? AppTheme.coverGradient : colors
     }
 }
 
 private struct SectionEmptyView: View {
+    let message: String
+
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "tray")
                 .font(.largeTitle)
-                .foregroundStyle(.secondary)
-            Text("표시할 만화가 없습니다.")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppTheme.secondaryText)
+            Text(AppLocalization.text(message))
+                .foregroundStyle(AppTheme.secondaryText)
         }
         .padding(32)
     }
 }
 
-@MainActor
-final class SectionDetailViewModel: ObservableObject {
-    // MARK: Internal
-
-    @Published var series: [LibrarySeries] = []
-    @Published var isLoading = false
-    @Published var errorMessage: String?
-
-    func updateService(_ service: LibraryServicing) {
-        self.service = service
-    }
-
-    func loadSection(sectionTitle: String, force: Bool = false) async {
-        guard let service = service else {
-            errorMessage = "서비스가 설정되지 않았습니다."
-            return
-        }
-
-        if !force, !series.isEmpty {
-            return
-        }
-
-        isLoading = true
-        errorMessage = nil
-
-        do {
-            let fetchedSeries = try await service.fetchFullSection(sectionTitle: sectionTitle)
-            series = fetchedSeries
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-
-        isLoading = false
-    }
-
-    // MARK: Private
-
-    private var service: LibraryServicing?
-}
-
 #Preview {
     NavigationStack {
-        SectionDetailView(sectionTitle: "Recently Added")
+        SectionDetailView(sectionTitle: "Recently Added",
+                          viewModel: LibraryViewModel(service: LibraryServiceFactory(baseURLString: nil,
+                                                                                    apiKey: nil).makeService()))
     }
 }
