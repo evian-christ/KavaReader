@@ -20,7 +20,9 @@ struct LibraryServiceFactory {
             return UnsupportedSchemeLibraryService(scheme: scheme)
         }
 
-        guard let host = components.host, !host.isEmpty else {
+        guard let host = components.host, !host.isEmpty,
+              components.user == nil, components.password == nil,
+              components.query == nil, components.fragment == nil else {
             return InvalidBaseURLLibraryService()
         }
 
@@ -61,8 +63,8 @@ private struct InvalidBaseURLLibraryService: LibraryServicing {
         throw LibraryServiceError.invalidBaseURL
     }
 
-    func fetchContinueReadingItems() async -> [ContinueReadingItem] {
-        return []
+    func fetchContinueReadingItems() async throws -> [ContinueReadingItem] {
+        throw LibraryServiceError.invalidBaseURL
     }
 }
 
@@ -89,7 +91,7 @@ private struct UnsupportedSchemeLibraryService: LibraryServicing {
         throw LibraryServiceError.unsupportedScheme(scheme)
     }
 
-    func fetchContinueReadingItems() async -> [ContinueReadingItem] {
-        return []
+    func fetchContinueReadingItems() async throws -> [ContinueReadingItem] {
+        throw LibraryServiceError.unsupportedScheme(scheme)
     }
 }
